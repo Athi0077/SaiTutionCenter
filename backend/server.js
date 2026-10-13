@@ -27,7 +27,11 @@ if (process.env.NODE_ENV !== 'test') {
 app.use(helmet());
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? [process.env.FRONTEND_URL || 'https://study-mate-jet.vercel.app'] 
+    ? [
+        process.env.FRONTEND_URL || 'https://sai-tution-center.vercel.app',
+        'https://sai-tution-center.vercel.app',
+        'https://study-mate-jet.vercel.app',
+      ] 
     : ['http://localhost:5173', 'http://127.0.0.1:5173'],
   credentials: true
 }));
