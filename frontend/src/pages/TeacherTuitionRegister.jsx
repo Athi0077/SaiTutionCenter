@@ -156,12 +156,11 @@ const TeacherTuitionRegister = () => {
                 </select>
               </div>
 
-              <div className="md:col-span-2">
+              {/* <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Tuition Batch <span className="text-red-500">*</span>
                 </label>
                 <select 
-                  required 
                   className="w-full border border-gray-200 dark:border-[#334155] bg-gray-50 dark:bg-[#172235] text-gray-800 dark:text-white rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition" 
                   value={formData.batchId} 
                   onChange={(e) => setFormData({ ...formData, batchId: e.target.value })} 
@@ -171,7 +170,7 @@ const TeacherTuitionRegister = () => {
                     <option key={c._id} value={c._id}>{c.batchName}</option>
                   ))}
                 </select>
-              </div>
+              </div> */}
             </div>
 
             <div className="border-t border-gray-200 dark:border-[#1E293B] pt-6 mt-6">
