@@ -222,12 +222,10 @@ const resetStudentPassword = async (req, res) => {
     } else {
       const TeacherAssignment = require("../models/TeacherAssignment");
       const assignments = await TeacherAssignment.find({ teacherId: req.user._id })
-        .populate("standardId", "name")
-        .populate("sectionId", "name");
+        .populate("standardId", "name");
       
       isStudentInTeacherClass = assignments.some(a => 
-        a.standardId?.name === studentClass.standard && 
-        a.sectionId?.name === studentClass.section
+        a.standardId?.name === studentClass.standard
       );
     }
 

@@ -62,13 +62,13 @@ const getIDCardData = async (user) => {
 
   if (user.role === "teacher") {
     const assignments = await TeacherAssignment.find({ teacherId: user._id })
-      .populate("standardId sectionId");
+      .populate("standardId");
     
     // Group unique classes
     const classes = new Set();
     assignments.forEach(a => {
-      if (a.standardId?.name && a.sectionId?.name) {
-        classes.add(`${a.standardId.name} - ${a.sectionId.name}`);
+      if (a.standardId?.name) {
+        classes.add(a.standardId.name);
       }
     });
 

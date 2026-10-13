@@ -16,19 +16,17 @@ exports.getTeacherSyllabus = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') return res.status(403).json({ success: false, message: 'Unauthorized' });
     const assignments = await TeacherAssignment.find({ teacherId: req.user._id })
-      .populate('standardId', 'name')
-      .populate('sectionId', 'name');
+      .populate('standardId', 'name');
 
     const activeYear = await getActiveAcademicYear();
     const result = [];
 
     for (let assignment of assignments) {
-      if (!assignment.standardId || !assignment.sectionId) continue;
+      if (!assignment.standardId) continue;
 
-      const className = `${assignment.standardId.name} - ${assignment.sectionId.name}`;
-      let classDoc = await Class.findOne({ className });
+      let classDoc = await Class.findOne({ standardId: assignment.standardId._id });
       if (!classDoc) {
-        classDoc = await Class.findOne({ standard: assignment.standardId.name, section: assignment.sectionId.name });
+        classDoc = await Class.findOne({ standard: assignment.standardId.name });
       }
       if (!classDoc) continue;
 
@@ -78,13 +76,12 @@ exports.getSyllabusChapters = async (req, res) => {
       if (!classDoc) return res.status(404).json({ success: false, message: 'Class not found' });
       
       const teacherAssignments = await TeacherAssignment.find({ teacherId: req.user._id })
-        .populate('standardId', 'name')
-        .populate('sectionId', 'name');
+        .populate('standardId', 'name');
 
       const isAssigned = teacherAssignments.some(a => {
-        if (!a.standardId || !a.sectionId) return false;
-        const matchClass = (a.standardId.name === classDoc.standard && a.sectionId.name === classDoc.section) ||
-                           (`${a.standardId.name} - ${a.sectionId.name}` === classDoc.className);
+        if (!a.standardId) return false;
+        const matchClass = (a.standardId.name === classDoc.standard) ||
+                           (a.standardId.name === classDoc.className);
         if (!matchClass) return false;
         if (a.isClassTeacher) return true;
         if (a.subject === subject) return true;
@@ -126,13 +123,12 @@ exports.createChapter = async (req, res) => {
     if (!classDoc) return res.status(404).json({ success: false, message: 'Class not found' });
     
     const teacherAssignments = await TeacherAssignment.find({ teacherId: req.user._id })
-      .populate('standardId', 'name')
-      .populate('sectionId', 'name');
+      .populate('standardId', 'name');
 
     const isAssigned = teacherAssignments.some(a => {
-      if (!a.standardId || !a.sectionId) return false;
-      const matchClass = (a.standardId.name === classDoc.standard && a.sectionId.name === classDoc.section) ||
-                         (`${a.standardId.name} - ${a.sectionId.name}` === classDoc.className);
+      if (!a.standardId) return false;
+      const matchClass = (a.standardId.name === classDoc.standard) ||
+                         (a.standardId.name === classDoc.className);
       if (!matchClass) return false;
       if (a.isClassTeacher) return true;
       if (a.subject === subject) return true;

@@ -15,13 +15,13 @@ const getTeachers = async (req, res) => {
     // Fetch assignments for these teachers
     const assignments = await TeacherAssignment.find({ teacherId: { $in: teachers.map(t => t._id) } })
       .populate('standardId', 'name')
-      .populate('sectionId', 'name');
+      .populate('subjectId', 'name');
 
     const teachersWithAssignments = teachers.map(t => {
       const assigned = assignments.filter(a => a.teacherId.toString() === t._id.toString());
       return {
         ...t.toObject(),
-        classesAssigned: assigned.map(a => `${a.standardId?.name} - ${a.sectionId?.name}`),
+        classesAssigned: assigned.map(a => a.standardId?.name).filter(Boolean),
         subjectsAssigned: assigned.map(a => a.subject).filter(Boolean)
       };
     });
