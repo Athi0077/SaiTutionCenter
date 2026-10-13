@@ -15,7 +15,8 @@ const teacherAssignmentSchema = new mongoose.Schema(
     sectionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Section",
-      required: true,
+      required: false,
+      default: null,
     },
     subject: {
       type: String,
@@ -39,8 +40,8 @@ const teacherAssignmentSchema = new mongoose.Schema(
   }
 );
 
-// Prevent duplicate assignment of the same teacher to the exact same standard/section
-teacherAssignmentSchema.index({ teacherId: 1, standardId: 1, sectionId: 1 }, { unique: true });
+// Prevent duplicate assignment of the same teacher to the same standard + subject
+teacherAssignmentSchema.index({ teacherId: 1, standardId: 1, subjectId: 1 }, { unique: true, sparse: true });
 
 const TeacherAssignment = mongoose.model("TeacherAssignment", teacherAssignmentSchema);
 
