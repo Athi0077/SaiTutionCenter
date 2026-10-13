@@ -135,6 +135,18 @@ if (process.env.NODE_ENV !== 'test') {
         // Ignored if it doesn't exist
       }
       await User.syncIndexes();
+
+      // Sync TeacherAssignment & Class indexes (section removal)
+      const TeacherAssignment = require("./src/models/TeacherAssignment");
+      try {
+        await TeacherAssignment.collection.dropIndex("teacherId_1_standardId_1_sectionId_1");
+        console.log("Dropped old sectionId index from teacherassignments");
+      } catch (e) { /* index may not exist */ }
+      await TeacherAssignment.syncIndexes();
+
+      const ClassModel = require("./src/models/Class");
+      await ClassModel.syncIndexes();
+      console.log("Indexes synced for TeacherAssignment and Class");
     } catch (err) {
       console.error("Index sync error:", err);
     }

@@ -187,7 +187,6 @@ exports.updateAssignment = async (req, res) => {
 
     assignment.teacherId = teacherId;
     assignment.standardId = standardId;
-    assignment.sectionId = undefined;
     assignment.subject = subjectName;
     assignment.subjectId = subjectId;
     assignment.isClassTeacher = Boolean(isClassTeacher);

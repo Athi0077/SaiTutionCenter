@@ -12,11 +12,14 @@ const classSchema = new mongoose.Schema(
     },
     section: {
       type: String,
-      required: true,
+      required: false,
+      default: null,
     },
     sectionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Section",
+      required: false,
+      default: null,
     },
     className: {
       type: String,

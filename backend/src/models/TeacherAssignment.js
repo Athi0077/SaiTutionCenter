@@ -12,12 +12,6 @@ const teacherAssignmentSchema = new mongoose.Schema(
       ref: "Standard",
       required: true,
     },
-    sectionId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Section",
-      required: false,
-      default: null,
-    },
     subject: {
       type: String,
     },
