@@ -1,0 +1,550 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+@theme {
+  --color-primary: var(--primary);
+  --color-primary-light: var(--primary-light);
+  --color-primary-dark: var(--primary-dark);
+  --shadow-soft: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+    font-family: 'Outfit', sans-serif;
+    background-image: radial-gradient(circle at 80% 20%, rgba(var(--primary-rgb, 37, 99, 235), 0.08) 0%, transparent 50%),
+                      radial-gradient(circle at 20% 80%, rgba(var(--primary-rgb, 37, 99, 235), 0.05) 0%, transparent 50%);
+    background-attachment: fixed;
+  }
+
+  :root {
+    --primary: #2563EB;
+    --primary-light: #EFF6FF;
+    --primary-dark: #1D4ED8;
+    /* Dark theme surface palette */
+    --dark-bg-base: #0B1120;
+    --dark-bg-sidebar: #0B1120;
+    --dark-bg-card: #172235;
+    --dark-bg-card-alt: #1E293B;
+    --dark-bg-elevated: #253247;
+    --dark-bg-input: #111B2E;
+    --dark-text-primary: #F1F5F9;
+    --dark-text-secondary: #CBD5E1;
+    --dark-text-muted: #94A3B8;
+    --dark-border: #334155;
+    --dark-border-light: #2A3A50;
+    --dark-accent: #10B981;
+    --dark-accent-hover: #059669;
+    --dark-focus-ring: #34D399;
+  }
+
+  .dark {
+    --primary: #10B981;
+    --primary-light: rgba(16, 185, 129, 0.12);
+    --primary-dark: #34D399;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/70 backdrop-blur-md border border-white/20;
+  }
+  .dark .glass-card {
+    @apply bg-slate-900/60 backdrop-blur-md border-slate-700/50;
+  }
+  .premium-card {
+    @apply transition-all duration-300 ease-out hover:-translate-y-2 hover:shadow-xl hover:shadow-primary/20;
+  }
+  .btn-primary {
+    @apply relative overflow-hidden transition-all duration-300 active:scale-95 hover:shadow-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-blue-500/30 border-0;
+  }
+  .dark .btn-primary {
+    @apply from-emerald-500 to-teal-600 shadow-emerald-500/30;
+  }
+  
+  .premium-skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  .dark .premium-skeleton {
+    background: linear-gradient(90deg, #1E293B 25%, #334155 50%, #1E293B 75%);
+    background-size: 200% 100%;
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* =============================================
+   DARK MODE — GLOBAL FOUNDATION
+   ============================================= */
+
+/* Body */
+.dark body,
+body.dark {
+  background-color: var(--dark-bg-base) !important;
+  background-image: none !important;
+  color: var(--dark-text-primary) !important;
+}
+
+/* =============================================
+   DARK MODE — CARDS & SURFACES
+   ============================================= */
+
+/* Main content area cards */
+.dark main .bg-white,
+.dark main .bg-white\/80,
+.dark main .bg-white\/70,
+.dark main .bg-white\/60 {
+  background-color: var(--dark-bg-card) !important;
+}
+
+/* Gray base backgrounds */
+.dark main .bg-gray-50,
+.dark .bg-gray-50 {
+  background-color: var(--dark-bg-base) !important;
+}
+.dark main .bg-gray-100,
+.dark main .bg-gray-200 {
+  background-color: var(--dark-bg-elevated) !important;
+}
+.dark main .bg-gray-50\/50 {
+  background-color: rgba(17, 27, 46, 0.5) !important;
+}
+
+/* =============================================
+   DARK MODE — TEXT COLORS
+   ============================================= */
+
+.dark main .text-gray-900,
+.dark main .text-gray-800 {
+  color: var(--dark-text-primary) !important;
+}
+.dark main .text-gray-700 {
+  color: var(--dark-text-secondary) !important;
+}
+.dark main .text-gray-600 {
+  color: #B0BEC5 !important;
+}
+.dark main .text-gray-500 {
+  color: var(--dark-text-muted) !important;
+}
+.dark main .text-gray-400 {
+  color: #64748B !important;
+}
+
+/* =============================================
+   DARK MODE — BORDERS
+   ============================================= */
+
+.dark main .border-gray-50,
+.dark main .border-gray-100,
+.dark main .border-gray-200 {
+  border-color: var(--dark-border) !important;
+}
+.dark main .border-gray-200\/50,
+.dark main .border-white\/40,
+.dark main .border-white\/50 {
+  border-color: var(--dark-border-light) !important;
+}
+.dark main .border-gray-300 {
+  border-color: #475569 !important;
+}
+.dark main .divide-gray-50 > :not(:last-child),
+.dark main .divide-gray-100 > :not(:last-child) {
+  border-color: var(--dark-border) !important;
+}
+
+/* =============================================
+   DARK MODE — HOVER STATES
+   ============================================= */
+
+.dark main .hover\:bg-gray-50:hover,
+.dark main .hover\:bg-gray-100:hover {
+  background-color: var(--dark-bg-elevated) !important;
+}
+.dark main .hover\:bg-blue-50:hover {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+}
+.dark main .hover\:bg-red-50:hover {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+}
+.dark main .hover\:bg-green-50:hover {
+  background-color: rgba(34, 197, 94, 0.12) !important;
+}
+.dark main .hover\:bg-purple-50:hover {
+  background-color: rgba(168, 85, 247, 0.12) !important;
+}
+.dark main .hover\:bg-emerald-50:hover {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+}
+.dark main .hover\:bg-orange-50:hover {
+  background-color: rgba(249, 115, 22, 0.12) !important;
+}
+
+/* =============================================
+   DARK MODE — FORMS & INPUTS
+   ============================================= */
+
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: var(--dark-bg-input) !important;
+  color: var(--dark-text-primary) !important;
+  border-color: var(--dark-border) !important;
+}
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #64748B !important;
+}
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus {
+  border-color: var(--dark-focus-ring) !important;
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.2) !important;
+}
+.dark select option {
+  background-color: var(--dark-bg-card) !important;
+  color: var(--dark-text-primary) !important;
+}
+
+/* =============================================
+   DARK MODE — SHADOWS
+   ============================================= */
+
+.dark .shadow-soft {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2) !important;
+}
+.dark .shadow-md {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3) !important;
+}
+.dark .shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* =============================================
+   DARK MODE — COLORED PILL BACKGROUNDS
+   Softened for dark backgrounds
+   ============================================= */
+
+.dark main .bg-blue-50 { background-color: rgba(59, 130, 246, 0.15) !important; }
+.dark main .bg-blue-100 { background-color: rgba(59, 130, 246, 0.2) !important; }
+.dark main .bg-green-50 { background-color: rgba(34, 197, 94, 0.15) !important; }
+.dark main .bg-green-100 { background-color: rgba(34, 197, 94, 0.2) !important; }
+.dark main .bg-red-50 { background-color: rgba(239, 68, 68, 0.15) !important; }
+.dark main .bg-red-100 { background-color: rgba(239, 68, 68, 0.2) !important; }
+.dark main .bg-orange-50 { background-color: rgba(249, 115, 22, 0.15) !important; }
+.dark main .bg-orange-100 { background-color: rgba(249, 115, 22, 0.2) !important; }
+.dark main .bg-amber-50 { background-color: rgba(245, 158, 11, 0.15) !important; }
+.dark main .bg-amber-100 { background-color: rgba(245, 158, 11, 0.2) !important; }
+.dark main .bg-yellow-50 { background-color: rgba(234, 179, 8, 0.12) !important; }
+.dark main .bg-yellow-100 { background-color: rgba(234, 179, 8, 0.18) !important; }
+.dark main .bg-purple-50 { background-color: rgba(168, 85, 247, 0.15) !important; }
+.dark main .bg-purple-100 { background-color: rgba(168, 85, 247, 0.2) !important; }
+.dark main .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.15) !important; }
+.dark main .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.2) !important; }
+.dark main .bg-pink-50 { background-color: rgba(236, 72, 153, 0.15) !important; }
+.dark main .bg-pink-100 { background-color: rgba(236, 72, 153, 0.2) !important; }
+.dark main .bg-indigo-50 { background-color: rgba(99, 102, 241, 0.15) !important; }
+.dark main .bg-indigo-100 { background-color: rgba(99, 102, 241, 0.2) !important; }
+.dark main .bg-teal-50 { background-color: rgba(20, 184, 166, 0.15) !important; }
+.dark main .bg-teal-100 { background-color: rgba(20, 184, 166, 0.2) !important; }
+.dark main .bg-cyan-50 { background-color: rgba(6, 182, 212, 0.15) !important; }
+.dark main .bg-cyan-100 { background-color: rgba(6, 182, 212, 0.2) !important; }
+
+/* Colored border badges in dark mode */
+.dark main .border-blue-100,
+.dark main .border-blue-200 { border-color: rgba(59, 130, 246, 0.3) !important; }
+.dark main .border-green-100,
+.dark main .border-green-200 { border-color: rgba(34, 197, 94, 0.3) !important; }
+.dark main .border-red-100,
+.dark main .border-red-200 { border-color: rgba(239, 68, 68, 0.3) !important; }
+.dark main .border-orange-100,
+.dark main .border-orange-200 { border-color: rgba(249, 115, 22, 0.3) !important; }
+.dark main .border-amber-100,
+.dark main .border-amber-200 { border-color: rgba(245, 158, 11, 0.3) !important; }
+.dark main .border-purple-100,
+.dark main .border-purple-200 { border-color: rgba(168, 85, 247, 0.3) !important; }
+.dark main .border-emerald-100 { border-color: rgba(16, 185, 129, 0.3) !important; }
+.dark main .border-yellow-100,
+.dark main .border-yellow-200,
+.dark main .border-yellow-300 { border-color: rgba(234, 179, 8, 0.3) !important; }
+.dark main .border-pink-100 { border-color: rgba(236, 72, 153, 0.3) !important; }
+
+/* =============================================
+   DARK MODE — COLORED TEXT ON DARK SURFACES
+   Brighten colored text for readability
+   ============================================= */
+
+.dark main .text-blue-600,
+.dark main .text-blue-700,
+.dark main .text-blue-800 { color: #93C5FD !important; }
+.dark main .text-blue-900 { color: #BFDBFE !important; }
+
+.dark main .text-green-600,
+.dark main .text-green-700,
+.dark main .text-green-800 { color: #86EFAC !important; }
+
+.dark main .text-red-600,
+.dark main .text-red-700,
+.dark main .text-red-800 { color: #FCA5A5 !important; }
+
+.dark main .text-orange-600,
+.dark main .text-orange-700,
+.dark main .text-orange-800 { color: #FDBA74 !important; }
+
+.dark main .text-amber-600,
+.dark main .text-amber-700,
+.dark main .text-amber-800 { color: #FCD34D !important; }
+
+.dark main .text-purple-600,
+.dark main .text-purple-700,
+.dark main .text-purple-800 { color: #D8B4FE !important; }
+
+.dark main .text-yellow-600,
+.dark main .text-yellow-700,
+.dark main .text-yellow-800 { color: #FDE047 !important; }
+
+.dark main .text-emerald-600,
+.dark main .text-emerald-700,
+.dark main .text-emerald-800 { color: #6EE7B7 !important; }
+
+.dark main .text-pink-600,
+.dark main .text-pink-700 { color: #F9A8D4 !important; }
+
+.dark main .text-indigo-600,
+.dark main .text-indigo-700 { color: #A5B4FC !important; }
+
+/* =============================================
+   DARK MODE — TABLES
+   ============================================= */
+
+.dark main table thead tr {
+  border-color: var(--dark-border) !important;
+}
+.dark main table tbody tr {
+  border-color: var(--dark-border-light) !important;
+}
+.dark main table tbody tr:hover {
+  background-color: var(--dark-bg-elevated) !important;
+}
+.dark main table th {
+  color: var(--dark-text-muted) !important;
+}
+.dark main table td {
+  color: var(--dark-text-secondary) !important;
+}
+.dark main table td .font-medium,
+.dark main table td .font-bold,
+.dark main table td .font-semibold {
+  color: var(--dark-text-primary) !important;
+}
+
+/* =============================================
+   RECHARTS / CHART LIBRARY - GLOBAL & DARK MODE
+   ============================================= */
+
+/* Glassmorphism Tooltip */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.dark .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: rgba(15, 23, 42, 0.7) !important;
+  border-color: rgba(51, 65, 85, 0.5) !important;
+}
+
+.dark .recharts-default-tooltip .recharts-tooltip-label {
+  color: var(--dark-text-primary) !important;
+}
+.dark .recharts-default-tooltip .recharts-tooltip-item {
+  color: var(--dark-text-secondary) !important;
+}
+
+/* Cartesian Grid */
+.recharts-cartesian-grid line {
+  stroke: rgba(226, 232, 240, 0.5) !important;
+  stroke-dasharray: 4 4 !important;
+}
+
+.dark .recharts-cartesian-grid line {
+  stroke: rgba(51, 65, 85, 0.5) !important;
+}
+
+.dark .recharts-text {
+  fill: var(--dark-text-muted) !important;
+}
+.dark .recharts-legend-item-text {
+  color: var(--dark-text-secondary) !important;
+}
+.dark .recharts-cursor {
+  fill: rgba(51, 65, 85, 0.3) !important;
+}
+
+/* Entry Animation for Charts */
+.recharts-wrapper {
+  animation: chart-fade-up 0.8s ease-out forwards;
+  opacity: 0;
+  transform: translateY(20px) scale(0.98);
+}
+
+@keyframes chart-fade-up {
+  0% { opacity: 0; transform: translateY(20px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* =============================================
+   DARK MODE — MOBILE BOTTOM NAV
+   ============================================= */
+
+.dark .fixed.bottom-0.bg-white,
+.dark .fixed.bottom-16.bg-white {
+  background-color: var(--dark-bg-sidebar) !important;
+  border-color: var(--dark-border) !important;
+}
+
+/* =============================================
+   DARK MODE — MODALS & DIALOGS (React Portal)
+   ============================================= */
+
+.dark .fixed.inset-0 .bg-white,
+.dark [role="dialog"] .bg-white,
+.dark .modal-content {
+  background-color: var(--dark-bg-card) !important;
+  color: var(--dark-text-primary) !important;
+}
+
+/* =============================================
+   DARK MODE — TOAST NOTIFICATIONS
+   ============================================= */
+
+.dark [data-sonner-toast],
+.dark .go3958317564 {
+  background-color: var(--dark-bg-card) !important;
+  color: var(--dark-text-primary) !important;
+  border-color: var(--dark-border) !important;
+}
+
+/* =============================================
+   DARK MODE — LOGIN / PUBLIC PAGES
+   ============================================= */
+
+.dark .bg-gray-100 {
+  background-color: var(--dark-bg-base) !important;
+}
+.dark .min-h-screen.bg-gray-100 .bg-white {
+  background-color: var(--dark-bg-card) !important;
+}
+
+/* =============================================
+   DARK MODE — SCROLLBAR
+   ============================================= */
+
+.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.dark ::-webkit-scrollbar-track {
+  background: var(--dark-bg-sidebar);
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #64748B;
+}
+
+/* =============================================
+   DARK MODE — GRADIENT HERO BANNERS
+   Scoped overrides for dashboard welcome sections
+   ============================================= */
+
+/* Principal dashboard hero */
+.dark main .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.08) !important;
+}
+
+/* Student dashboard hero gradient */
+.dark main .from-blue-50 { --tw-gradient-from: rgba(59, 130, 246, 0.08) !important; }
+.dark main .to-indigo-100 { --tw-gradient-to: rgba(99, 102, 241, 0.06) !important; }
+
+/* Teacher dashboard hero gradient */
+.dark main .from-red-50 { --tw-gradient-from: rgba(239, 68, 68, 0.08) !important; }
+.dark main .to-red-100 { --tw-gradient-to: rgba(239, 68, 68, 0.06) !important; }
+
+/* =============================================
+   DARK MODE — MISCELLANEOUS
+   ============================================= */
+
+/* Backdrop blur surfaces */
+.dark main .backdrop-blur-xl,
+.dark main .backdrop-blur {
+  --tw-backdrop-blur: blur(16px);
+}
+
+/* Animate pulse backgrounds */
+.dark .animate-pulse .bg-gray-200 {
+  background-color: var(--dark-bg-elevated) !important;
+}
+.dark .animate-pulse .bg-gray-100 {
+  background-color: var(--dark-bg-card) !important;
+}
+
+/* Primary accent colored buttons in dark mode */
+.dark main .bg-primary {
+  background-color: var(--dark-accent) !important;
+}
+.dark main .hover\:bg-primary-dark:hover {
+  background-color: var(--dark-accent-hover) !important;
+}
+.dark main .text-primary {
+  color: var(--dark-accent) !important;
+}
+
+/* Bordered cards with colored bottom stripe */
+.dark main .border-b-4 {
+  border-bottom-width: 4px !important;
+}
+
+/* Fix status badge text inside colored pill containers */
+.dark main .bg-green-50 .text-green-600,
+.dark main .bg-green-50 .text-green-700 {
+  color: #6EE7B7 !important;
+}
+.dark main .bg-red-50 .text-red-600,
+.dark main .bg-red-50 .text-red-700 {
+  color: #FCA5A5 !important;
+}
+.dark main .bg-orange-50 .text-orange-600,
+.dark main .bg-orange-50 .text-orange-700 {
+  color: #FDBA74 !important;
+}
+.dark main .bg-blue-50 .text-blue-600,
+.dark main .bg-blue-50 .text-blue-700 {
+  color: #93C5FD !important;
+}
+.dark main .bg-purple-50 .text-purple-600,
+.dark main .bg-purple-50 .text-purple-700 {
+  color: #D8B4FE !important;
+}
+.dark main .bg-amber-50 .text-amber-600,
+.dark main .bg-amber-50 .text-amber-700 {
+  color: #FCD34D !important;
+}
+
+/* Orange badge inside gradient hero (fee pending) */
+.dark main .from-amber-50 {
+  --tw-gradient-from: rgba(245, 158, 11, 0.1) !important;
+}
+.dark main .to-orange-50 {
+  --tw-gradient-to: rgba(249, 115, 22, 0.08) !important;
+}
+

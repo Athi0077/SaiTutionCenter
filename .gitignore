@@ -1,0 +1,13 @@
+node_modules/
+.env
+.DS_Store
+dist/
+build/
+.env.loadtest
+load-tests/data/
+
+.env
+.env.*
+!.env.example
+firebase-admin.json
+backend/src/config/firebase-admin.json
