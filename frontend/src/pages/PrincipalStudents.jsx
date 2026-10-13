@@ -29,9 +29,9 @@ const PrincipalStudents = () => {
     return acc;
   }, {});
 
-  // Sort sections alphabetically within each standard
+  // Sort sections/classes alphabetically within each standard
   Object.keys(groupedClasses).forEach(standard => {
-    groupedClasses[standard].sort((a, b) => a.section.localeCompare(b.section));
+    groupedClasses[standard].sort((a, b) => (a.section || a.className || '').localeCompare(b.section || b.className || ''));
   });
 
   if (loading) return <Layout><div className="p-12 text-center text-gray-500 font-medium">Loading classes...</div></Layout>;
@@ -57,8 +57,8 @@ const PrincipalStudents = () => {
                         to={`/principal/students/${cls._id}`}
                         className="bg-white border-2 border-gray-100 hover:border-blue-500 hover:shadow-md p-4 rounded-xl text-center transition cursor-pointer"
                       >
-                        <p className="font-bold text-gray-800 text-lg">{cls.section}</p>
-                        <p className="text-xs text-gray-500 mt-1 uppercase tracking-wider">Section</p>
+                        <p className="font-bold text-gray-800 text-lg">{cls.section || cls.className || cls.standard}</p>
+                        <p className="text-xs text-gray-500 mt-1 uppercase tracking-wider">{cls.section ? "Section" : "Class"}</p>
                       </Link>
                     ))}
                   </div>

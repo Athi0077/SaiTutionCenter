@@ -72,7 +72,7 @@ const PrincipalClassAttendance = () => {
             &larr; Back
           </Link>
           <h2 className="text-2xl font-bold text-gray-800">
-            {classData.standard} - {classData.section} Section
+            {classData.standard} {classData.section ? `- ${classData.section} Section` : ''}
           </h2>
         </div>
 

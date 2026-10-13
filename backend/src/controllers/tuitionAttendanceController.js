@@ -6,29 +6,33 @@ const Section = require("../models/Section");
 // @access  Private (Teacher)
 const markAttendance = async (req, res) => {
   try {
-    const { batchId, sessionId, date, students } = req.body;
+    const { batchId, standardId, sessionId, date, students } = req.body;
     
     // students should be an array of { studentId, status }
-    if (!batchId || !sessionId || !date || !students || !Array.isArray(students)) {
+    if (!date || !students || !Array.isArray(students)) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
     const attendanceRecords = students.map((student) => ({
       studentId: student.studentId,
-      batchId,
-      sessionId,
+      batchId: batchId || null,
+      standardId: standardId || null,
+      sessionId: sessionId || null,
       date: new Date(date),
       status: student.status,
       markedBy: req.user._id,
     }));
 
-    // Remove existing records for this batch/session/date to avoid duplicates
-    await TuitionAttendance.deleteMany({
-      batchId,
-      sessionId,
+    // Remove existing records for this student/date to avoid duplicates
+    const deleteFilter = {
       date: new Date(date),
       studentId: { $in: students.map(s => s.studentId) }
-    });
+    };
+    if (batchId) deleteFilter.batchId = batchId;
+    if (standardId) deleteFilter.standardId = standardId;
+    if (sessionId) deleteFilter.sessionId = sessionId;
+
+    await TuitionAttendance.deleteMany(deleteFilter);
 
     const result = await TuitionAttendance.insertMany(attendanceRecords);
 
@@ -43,10 +47,16 @@ const markAttendance = async (req, res) => {
 // @access  Private
 const getAttendance = async (req, res) => {
   try {
-    const { batchId, sessionId, date, studentId } = req.query;
+    const { batchId, standardId, sessionId, date, studentId } = req.query;
     let filter = {};
     
-    if (batchId && batchId !== 'all') filter.batchId = batchId;
+    const targetGroup = batchId || standardId;
+    if (targetGroup && targetGroup !== 'all') {
+      filter.$or = [
+        { batchId: targetGroup },
+        { standardId: targetGroup }
+      ];
+    }
     if (sessionId) filter.sessionId = sessionId;
     if (date) {
         const queryDate = new Date(date);
@@ -67,6 +77,7 @@ const getAttendance = async (req, res) => {
     let attendance = await TuitionAttendance.find(filter)
       .populate("studentId", "name rollNumber studentId profilePic")
       .populate("batchId", "name batchName")
+      .populate("standardId", "name")
       .populate("sessionId", "startTime endTime room subject")
       .populate("markedBy", "name");
       
@@ -77,11 +88,13 @@ const getAttendance = async (req, res) => {
       const dateStr = typeof date === "string" ? date.split("T")[0] : "";
       
       let sessionQuery = { attendanceDate: dateStr };
-      if (batchId && batchId !== "all") {
+      if (targetGroup && targetGroup !== "all") {
         const matchingClasses = await Class.find({
           $or: [
-            { _id: batchId },
-            { sectionId: batchId }
+            { _id: targetGroup },
+            { standardId: targetGroup },
+            { standard: targetGroup },
+            { sectionId: targetGroup }
           ]
         }).select("_id");
         if (matchingClasses.length > 0) {
@@ -114,11 +127,11 @@ const getAttendance = async (req, res) => {
             studentId: r.studentId,
             batchId: session.classId?.sectionId 
               ? { _id: session.classId.sectionId, name: session.classId.section || session.classId.className }
-              : { _id: session.classId?._id, name: session.classId?.className || "Tuition" },
+              : { _id: session.classId?._id, name: session.classId?.standard || session.classId?.className || "Tuition" },
             sessionId: {
               startTime: session.session === "DAILY" ? "Daily" : session.session,
               endTime: "",
-              subject: session.classId?.className || "Tuition"
+              subject: session.classId?.className || session.classId?.standard || "Tuition"
             },
             status: r.status,
             markedBy: session.submittedBy,

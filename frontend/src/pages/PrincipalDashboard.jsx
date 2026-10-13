@@ -53,6 +53,7 @@ const PrincipalDashboard = () => {
   const [selectedTuitionDate, setSelectedTuitionDate] = useState(new Date().toISOString().split('T')[0]);
   const [tuitionAttendanceData, setTuitionAttendanceData] = useState([]);
   const [tuitionAttendanceLoading, setTuitionAttendanceLoading] = useState(false);
+  const [allStudentsList, setAllStudentsList] = useState([]);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -60,7 +61,7 @@ const PrincipalDashboard = () => {
         const res = await api.get('/dashboard/principal');
         setDashboardData(res.data.data);
         
-        const [stdsRes, asgRes, usersRes, reqRes, reportsRes, schoolNameRes, sessionRes, feesRes, batchesRes] = await Promise.all([
+        const [stdsRes, asgRes, usersRes, reqRes, reportsRes, schoolNameRes, sessionRes, feesRes, batchesRes, studentsRes] = await Promise.all([
           api.get('/standards'),
           api.get('/teacher-assignments'),
           api.get('/users/active-teachers'),
@@ -69,7 +70,8 @@ const PrincipalDashboard = () => {
           api.get('/id-card/school-name').catch(() => ({ data: { schoolName: 'StudyMate School' } })),
           api.get('/tuition-sessions').catch(() => ({ data: { data: [] } })),
           api.get('/tuition-fees').catch(() => ({ data: { data: [] } })),
-          api.get('/batches').catch(() => ({ data: [] }))
+          api.get('/batches').catch(() => ({ data: [] })),
+          api.get('/users/students').catch(() => ({ data: { data: [] } }))
         ]);
         
         setStats({
@@ -95,9 +97,11 @@ const PrincipalDashboard = () => {
           setPendingReports(unresolved.slice(0, 4));
         }
 
-        // Use /batches API directly — no longer derived from sections
+        // Use /batches API directly — returns standards/classes
         const allBatches = Array.isArray(batchesRes.data) ? batchesRes.data : (batchesRes.data?.data || []);
+        const students = Array.isArray(studentsRes.data?.data) ? studentsRes.data.data : (Array.isArray(studentsRes.data) ? studentsRes.data : []);
 
+        setAllStudentsList(students);
         setTuitionData({
           batches: allBatches,
           sessions: sessionRes.data?.data || [],
@@ -162,7 +166,6 @@ const PrincipalDashboard = () => {
     }
   };
 
-  const totalBatches = tuitionData.batches.length;
   const uniqueTuitionStudents = new Set();
   tuitionData.batches.forEach(b => {
     (b.students || []).forEach(s => {
@@ -170,6 +173,11 @@ const PrincipalDashboard = () => {
       if (id) uniqueTuitionStudents.add(id);
     });
   });
+  allStudentsList.forEach(s => {
+    const id = (s._id || s)?.toString();
+    if (id) uniqueTuitionStudents.add(id);
+  });
+
   const totalTuitionStudents = uniqueTuitionStudents.size > 0 
     ? uniqueTuitionStudents.size 
     : (dashboardData?.totalStudents || 0);
@@ -185,12 +193,12 @@ const PrincipalDashboard = () => {
   const isAllBatches = !selectedTuitionBatch || selectedTuitionBatch === 'all';
   const activeBatch = isAllBatches ? null : tuitionData.batches.find(b => b._id === selectedTuitionBatch);
 
-  // Collect students according to selected batch or all batches
+  // Collect students according to selected standard/batch or all
   const displayedStudents = useMemo(() => {
     if (isAllBatches) {
       const studentMap = new Map();
       tuitionData.batches.forEach(b => {
-        const batchTitle = b.name ? `${b.name}` : (b.batchName || 'Tuition Batch');
+        const batchTitle = b.name ? `${b.name} Standard` : (b.batchName || 'Tuition Student');
         (b.students || []).forEach(s => {
           const id = (s._id || s)?.toString();
           if (id && !studentMap.has(id)) {
@@ -202,16 +210,29 @@ const PrincipalDashboard = () => {
           }
         });
       });
+
+      // Also ensure all registered students appear under overall view
+      allStudentsList.forEach(s => {
+        const id = (s._id || s)?.toString();
+        if (id && !studentMap.has(id)) {
+          studentMap.set(id, {
+            ...s,
+            batchName: s.standard ? `${s.standard} Standard` : 'Tuition Student',
+            batchId: 'general'
+          });
+        }
+      });
+
       return Array.from(studentMap.values());
     } else {
-      const batchTitle = activeBatch?.name ? `${activeBatch.name}` : (activeBatch?.batchName || 'Tuition Batch');
+      const batchTitle = activeBatch?.name ? `${activeBatch.name} Standard` : (activeBatch?.batchName || 'Standard');
       return (activeBatch?.students || []).map(s => ({
         ...(typeof s === 'object' ? s : { _id: s }),
         batchName: batchTitle,
         batchId: activeBatch?._id
       }));
     }
-  }, [isAllBatches, tuitionData.batches, activeBatch]);
+  }, [isAllBatches, tuitionData.batches, activeBatch, allStudentsList]);
 
   const totalDisplayStudents = displayedStudents.length;
   const displayedStudentIds = useMemo(() => new Set(displayedStudents.map(s => (s._id || s)?.toString())), [displayedStudents]);
@@ -284,7 +305,7 @@ const PrincipalDashboard = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/50 dark:bg-slate-900/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 mt-8">
           <div>
             <h2 className="text-xl font-bold text-gray-800 dark:text-white">Daily Tuition Attendance</h2>
-            <p className="text-xs text-gray-500 dark:text-slate-400">View real-time tuition attendance by batch or overall.</p>
+            <p className="text-xs text-gray-500 dark:text-slate-400">View real-time tuition attendance by standard or overall.</p>
           </div>
           <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             <select
@@ -297,7 +318,7 @@ const PrincipalDashboard = () => {
             >
               <option value="all">🌟 All Students (Overall)</option>
               {tuitionData.batches.map(b => (
-                <option key={b._id} value={b._id}>{b.name ? `${b.name}` : b.batchName || 'Unknown Batch'}</option>
+                <option key={b._id} value={b._id}>{b.name ? `${b.name} Standard` : b.batchName || 'Standard'}</option>
               ))}
             </select>
             
@@ -325,9 +346,9 @@ const PrincipalDashboard = () => {
           </div>
         </div>
 
-        {tuitionData.batches.length === 0 ? (
+        {displayedStudents.length === 0 && !tuitionAttendanceLoading ? (
           <div className="p-4 text-center text-sm text-gray-500 bg-white/50 rounded-2xl">
-            No tuition batches available. Create a batch first.
+            No students found. Register students first.
           </div>
         ) : (
           <>
@@ -337,80 +358,6 @@ const PrincipalDashboard = () => {
               <StatCard icon="❌" bgIconClass="bg-red-100 text-red-600" borderClass="border-red-500" value={absentCount} label={isAllBatches ? "Total Absent" : "Absent"} />
               <StatCard icon="🛌" bgIconClass="bg-amber-100 text-amber-600" borderClass="border-amber-500" value={leaveCount} label={isAllBatches ? "Total On Leave" : "On Leave"} />
               <StatCard icon="📊" bgIconClass="bg-indigo-100 text-indigo-600" borderClass="border-indigo-500" value={`${attendanceRate}%`} label={isAllBatches ? "Overall Attendance" : "Attendance Rate"} />
-            </div>
-
-            {/* Attendance Table */}
-            <div className="bg-white/80 dark:bg-slate-800/90 backdrop-blur-xl border border-white/40 dark:border-slate-700 rounded-2xl shadow-soft p-6 overflow-hidden">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
-                <h2 className="text-lg font-bold text-gray-800 dark:text-white">
-                  {isAllBatches ? "Student Attendance Details (Overall Students)" : `Student Attendance Details — ${activeBatch?.name || activeBatch?.batchName || ''}`}
-                </h2>
-                <span className="text-xs font-bold px-3 py-1 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                  {isAllBatches ? "🌟 All Batches (Overall)" : (activeBatch?.name || activeBatch?.batchName)}
-                </span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm whitespace-nowrap">
-                  <thead>
-                    <tr className="text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-slate-700">
-                      <th className="pb-3 font-medium px-4">Student Name</th>
-                      <th className="pb-3 font-medium px-4">Student ID</th>
-                      <th className="pb-3 font-medium px-4">Batch</th>
-                      <th className="pb-3 font-medium px-4">Status</th>
-                      <th className="pb-3 font-medium px-4">Marked By</th>
-                      <th className="pb-3 font-medium px-4">Session / Class Time</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayedStudents.length === 0 ? (
-                      <tr>
-                        <td colSpan="6" className="py-6 text-center text-gray-500">
-                          {isAllBatches ? "No students found across any tuition batches." : "No students enrolled in this batch."}
-                        </td>
-                      </tr>
-                    ) : tuitionAttendanceLoading ? (
-                      <tr>
-                        <td colSpan="6" className="py-8 text-center text-gray-500">Loading attendance data...</td>
-                      </tr>
-                    ) : (
-                      displayedStudents.map(student => {
-                        const sId = (student._id || student)?.toString();
-                        const record = tuitionAttendanceData.find(a => {
-                          const aStudentId = (a.studentId?._id || a.studentId)?.toString();
-                          return aStudentId === sId;
-                        });
-                        const status = record?.status || 'not_marked';
-                        
-                        let statusUI = <span className="px-2.5 py-1 rounded-md bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 font-medium text-xs">Not Marked</span>;
-                        if (status === 'present') statusUI = <span className="px-2.5 py-1 rounded-md bg-green-100 text-green-700 font-semibold text-xs inline-flex items-center gap-1">✓ Present</span>;
-                        if (status === 'absent') statusUI = <span className="px-2.5 py-1 rounded-md bg-red-100 text-red-700 font-semibold text-xs inline-flex items-center gap-1">✕ Absent</span>;
-                        if (status === 'leave') statusUI = <span className="px-2.5 py-1 rounded-md bg-amber-100 text-amber-700 font-semibold text-xs inline-flex items-center gap-1">⏱ Leave</span>;
-
-                        const sessionTime = record?.sessionId 
-                          ? (typeof record.sessionId === 'object' && record.sessionId.startTime 
-                              ? `${record.sessionId.startTime} - ${record.sessionId.endTime}` 
-                              : 'Recorded')
-                          : '—';
-
-                        return (
-                          <tr key={sId} className="border-b border-gray-50 dark:border-slate-700/50 hover:bg-gray-50/50 dark:hover:bg-slate-800/50 transition">
-                            <td className="py-3 px-4 font-semibold text-gray-800 dark:text-white">{student.name || 'Unnamed Student'}</td>
-                            <td className="py-3 px-4 text-gray-500 text-xs font-mono">{student.studentId || student.rollNumber || (sId ? sId.substring(0, 8) : '—')}</td>
-                            <td className="py-3 px-4">
-                              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold">
-                                {student.batchName || record?.batchId?.name || record?.batchId?.batchName || 'Tuition'}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4">{statusUI}</td>
-                            <td className="py-3 px-4 text-gray-500 text-xs">{record?.markedBy?.name || '—'}</td>
-                            <td className="py-3 px-4 text-gray-500 text-xs">{sessionTime}</td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
             </div>
           </>
         )}
@@ -473,7 +420,7 @@ const PrincipalDashboard = () => {
                   <thead>
                     <tr className="text-gray-500 border-b border-gray-100">
                       <th className="pb-3 font-medium">Teacher</th>
-                      <th className="pb-3 font-medium">Class & Section</th>
+                      <th className="pb-3 font-medium">Standard / Class</th>
                       <th className="pb-3 font-medium">Subject</th>
                       <th className="pb-3 font-medium">Status</th>
                     </tr>
@@ -482,7 +429,7 @@ const PrincipalDashboard = () => {
                     {teacherAssignments.length > 0 ? teacherAssignments.map(asg => (
                       <tr key={asg._id} className="border-b border-gray-50 last:border-0">
                         <td className="py-3 font-medium text-gray-800">{asg.teacherId?.name || 'Unknown'}</td>
-                        <td className="py-3 text-gray-500">{asg.standardId?.name} - {asg.sectionId?.name}</td>
+                        <td className="py-3 text-gray-500">{asg.standardId?.name || 'Standard'}{asg.sectionId?.name ? ` - ${asg.sectionId.name}` : ''}</td>
                         <td className="py-3 text-gray-500">{asg.subject || 'General'}</td>
                         <td className="py-3"><span className="px-2 py-1 bg-green-50 text-green-600 rounded-md text-xs font-semibold">Assigned</span></td>
                       </tr>

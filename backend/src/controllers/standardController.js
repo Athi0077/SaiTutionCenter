@@ -15,6 +15,23 @@ exports.createStandard = async (req, res) => {
     if (standardExists) return res.status(400).json({ success: false, message: "Standard already exists" });
 
     const standard = await Standard.create({ name, createdBy: req.user._id });
+
+    // Also ensure a Class document exists for this standard (since sections are removed)
+    await Class.findOneAndUpdate(
+      { $or: [{ standardId: standard._id }, { standard: name }] },
+      {
+        $setOnInsert: {
+          standard: name,
+          standardId: standard._id,
+          className: name,
+          status: "active",
+          students: [],
+          subjects: []
+        }
+      },
+      { upsert: true, new: true }
+    );
+
     res.status(201).json({ success: true, message: "Standard created successfully", data: standard });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

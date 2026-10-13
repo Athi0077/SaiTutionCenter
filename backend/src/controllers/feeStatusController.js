@@ -160,16 +160,27 @@ const updateStudentFeeStatus = async (req, res) => {
       { upsert: true, new: true, runValidators: true }
     );
 
-    // Also sync TuitionFee status
+    // Also sync TuitionFee status and paidAmount
     const TuitionFee = require("../models/TuitionFee");
-    await TuitionFee.updateMany(
-      { studentId },
-      {
-        $set: {
-          status: feeStatus === "completed" ? "COMPLETED" : "PENDING"
+    const isCompleted = feeStatus === "completed";
+    const tuitionFees = await TuitionFee.find({ studentId });
+    for (const tf of tuitionFees) {
+      tf.status = isCompleted ? "COMPLETED" : "PENDING";
+      tf.paidAmount = isCompleted ? tf.totalAmount : 0;
+      if (isCompleted) {
+        if (!tf.paymentHistory || tf.paymentHistory.length === 0) {
+          tf.paymentHistory.push({
+            amount: tf.totalAmount,
+            method: "Cash",
+            remarks: "Marked as completed",
+            date: new Date()
+          });
         }
+      } else {
+        tf.paymentHistory = [];
       }
-    );
+      await tf.save();
+    }
 
     res.json({
       success: true,

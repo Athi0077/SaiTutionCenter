@@ -9,13 +9,21 @@ const tuitionAttendanceSchema = new mongoose.Schema(
     },
     batchId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Section",
-      required: true,
+      ref: "Class",
+      required: false,
+      default: null,
+    },
+    standardId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Standard",
+      required: false,
+      default: null,
     },
     sessionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "TuitionSession",
-      required: true,
+      required: false,
+      default: null,
     },
     date: {
       type: Date,
@@ -40,8 +48,8 @@ const tuitionAttendanceSchema = new mongoose.Schema(
   }
 );
 
-// One student must have ONLY ONE attendance record per batch per session per date
-tuitionAttendanceSchema.index({ studentId: 1, batchId: 1, sessionId: 1, date: 1 }, { unique: true });
+tuitionAttendanceSchema.index({ studentId: 1, date: 1, sessionId: 1 });
+tuitionAttendanceSchema.index({ date: 1 });
 
 const TuitionAttendance = mongoose.model("TuitionAttendance", tuitionAttendanceSchema);
 

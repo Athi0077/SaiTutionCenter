@@ -81,8 +81,30 @@ const getFees = async (req, res) => {
 
     const fees = await TuitionFee.find(filter)
       .populate("studentId", "name rollNumber studentId")
-      .populate("batchId", "batchName")
+      .populate("batchId", "className standard batchName")
+      .populate("standardId", "name")
+      .populate("classId", "standard className")
       .sort({ createdAt: -1 });
+
+    // Auto-backfill standardId/classId for any fee missing them
+    const Class = require("../models/Class");
+    for (const f of fees) {
+      if ((!f.standardId || !f.classId || !f.batchId) && f.studentId?._id) {
+        const studentClass = await Class.findOne({ students: f.studentId._id });
+        if (studentClass) {
+          const updateObj = {};
+          if (!f.classId) updateObj.classId = studentClass._id;
+          if (!f.batchId) updateObj.batchId = studentClass._id;
+          if (!f.standardId && studentClass.standardId) updateObj.standardId = studentClass.standardId;
+          if (Object.keys(updateObj).length > 0) {
+            await TuitionFee.findByIdAndUpdate(f._id, { $set: updateObj });
+            if (updateObj.standardId) f.standardId = { _id: studentClass.standardId, name: studentClass.standard };
+            if (updateObj.classId) f.classId = studentClass;
+            if (updateObj.batchId) f.batchId = studentClass;
+          }
+        }
+      }
+    }
       
     res.json({ success: true, data: fees });
   } catch (error) {
@@ -108,12 +130,31 @@ const recordPayment = async (req, res) => {
     fee.paidAmount += Number(amount);
     fee.paymentHistory.push({
       amount: Number(amount),
-      method,
-      remarks,
+      method: method || "Cash",
+      remarks: remarks || "",
       date: new Date()
     });
 
+    if (fee.paidAmount >= fee.totalAmount) {
+      fee.status = "COMPLETED";
+    }
+
     await fee.save();
+
+    if (fee.status === "COMPLETED") {
+      await FeeStatus.updateMany(
+        { studentId: fee.studentId },
+        {
+          $set: {
+            feeStatus: "completed",
+            feePeriod: fee.feePeriod || "Monthly",
+            statusUpdatedAt: new Date(),
+            updatedBy: req.user._id
+          }
+        }
+      );
+    }
+
     res.json({ success: true, message: "Payment recorded successfully", data: fee });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -137,7 +178,9 @@ const getMyFees = async (req, res) => {
     }
 
     const fees = await TuitionFee.find({ studentId })
-      .populate("batchId", "batchName")
+      .populate("batchId", "batchName className standard")
+      .populate("standardId", "name")
+      .populate("classId", "standard className")
       .sort({ dueDate: -1, createdAt: -1 });
 
     res.json({ success: true, data: fees });
@@ -154,20 +197,43 @@ const updateFeeStatus = async (req, res) => {
     const fee = await TuitionFee.findById(id);
     if (!fee) return res.status(404).json({ success: false, message: "Fee record not found" });
 
-    if (status) fee.status = status;
     if (feeAmount !== undefined && feeAmount !== '') fee.totalAmount = Number(feeAmount);
     if (feeDetails !== undefined) fee.feeDetails = feeDetails;
     if (feePeriod !== undefined) fee.feePeriod = feePeriod;
+
+    if (status) {
+      const isCompleted = status === "COMPLETED" || status === "Paid" || status.toLowerCase() === "completed";
+      fee.status = isCompleted ? "COMPLETED" : "PENDING";
+
+      if (isCompleted) {
+        fee.paidAmount = fee.totalAmount;
+        if (!fee.paymentHistory || fee.paymentHistory.length === 0) {
+          fee.paymentHistory.push({
+            amount: fee.totalAmount,
+            method: "Cash",
+            remarks: "Marked as completed",
+            date: new Date()
+          });
+        }
+      } else {
+        fee.paidAmount = 0;
+        fee.paymentHistory = [];
+      }
+    } else if (feeAmount !== undefined && (fee.status === "COMPLETED" || fee.status === "Paid")) {
+      // Amount changed while completed -> adjust paidAmount to match
+      fee.paidAmount = fee.totalAmount;
+    }
 
     await fee.save();
 
     // Sync FeeStatus for this student
     if (status) {
+      const isCompleted = fee.status === "COMPLETED";
       await FeeStatus.updateMany(
         { studentId: fee.studentId },
         {
           $set: {
-            feeStatus: status.toLowerCase() === "completed" ? "completed" : "pending",
+            feeStatus: isCompleted ? "completed" : "pending",
             feePeriod: fee.feePeriod || "Monthly",
             statusUpdatedAt: new Date(),
             updatedBy: req.user._id

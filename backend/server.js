@@ -147,6 +147,66 @@ if (process.env.NODE_ENV !== 'test') {
       const ClassModel = require("./src/models/Class");
       await ClassModel.syncIndexes();
       console.log("Indexes synced for TeacherAssignment and Class");
+
+      const TuitionAttendance = require("./src/models/TuitionAttendance");
+      try {
+        await TuitionAttendance.collection.dropIndex("studentId_1_batchId_1_sessionId_1_date_1");
+        console.log("Dropped old unique batchId index from tuitionattendances");
+      } catch (e) { /* index may not exist */ }
+      await TuitionAttendance.syncIndexes();
+
+      // Ensure each Standard has a Class document
+      const Standard = require("./src/models/Standard");
+      const allStds = await Standard.find();
+      for (const std of allStds) {
+        await ClassModel.findOneAndUpdate(
+          { $or: [{ standardId: std._id }, { standard: std.name }] },
+          {
+            $setOnInsert: {
+              standard: std.name,
+              standardId: std._id,
+              className: std.name,
+              status: "active",
+              students: [],
+              subjects: []
+            }
+          },
+          { upsert: true }
+        );
+      }
+
+      // Heal / Backfill TuitionFee documents
+      try {
+        const TuitionFee = require("./src/models/TuitionFee");
+        const feesToFix = await TuitionFee.find();
+        for (const fee of feesToFix) {
+          let changed = false;
+          if (!fee.standardId || !fee.classId || !fee.batchId) {
+            const studentClass = await ClassModel.findOne({ students: fee.studentId });
+            if (studentClass) {
+              if (!fee.classId) { fee.classId = studentClass._id; changed = true; }
+              if (!fee.batchId) { fee.batchId = studentClass._id; changed = true; }
+              if (!fee.standardId && studentClass.standardId) { fee.standardId = studentClass.standardId; changed = true; }
+            }
+          }
+          if (fee.status === "COMPLETED" || fee.status === "Paid") {
+            if (fee.paidAmount !== fee.totalAmount) {
+              fee.paidAmount = fee.totalAmount;
+              changed = true;
+            }
+          } else if (fee.status === "PENDING" || fee.status === "Pending") {
+            if (fee.paidAmount !== 0) {
+              fee.paidAmount = 0;
+              changed = true;
+            }
+          }
+          if (changed) {
+            await fee.save();
+          }
+        }
+      } catch (feeErr) {
+        console.error("TuitionFee heal error:", feeErr);
+      }
     } catch (err) {
       console.error("Index sync error:", err);
     }

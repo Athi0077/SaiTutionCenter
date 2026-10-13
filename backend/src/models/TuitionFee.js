@@ -9,7 +9,19 @@ const tuitionFeeSchema = new mongoose.Schema(
     },
     batchId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Section",
+      ref: "Class",
+      required: false,
+      default: null,
+    },
+    standardId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Standard",
+      required: false,
+      default: null,
+    },
+    classId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Class",
       required: false,
       default: null,
     },

@@ -76,6 +76,15 @@ exports.registerTuitionStudent = async (req, res) => {
           { standard: standard.name }
         ]
       });
+      if (!classDoc) {
+        classDoc = await Class.create({
+          standard: standard.name,
+          standardId: standard._id,
+          className: standard.name,
+          status: 'active',
+          students: [newUser._id]
+        });
+      }
     } else if (section) {
       classDoc = await Class.findOne({ section: section.name });
     }
@@ -104,7 +113,11 @@ exports.registerTuitionStudent = async (req, res) => {
     // Automatically create TuitionFee record
     const feeData = {
       studentId: newUser._id,
+      standardId: standard ? standard._id : (classDoc ? classDoc.standardId : null),
+      classId: classDoc ? classDoc._id : null,
+      batchId: classDoc ? classDoc._id : (section ? section._id : null),
       totalAmount: Number(feeAmount),
+      paidAmount: 0,
       feePeriod: period,
       feeDetails: feeDetails || (period === 'Yearly' ? 'Yearly Tuition Fee' : 'Monthly Tuition Fee'),
       status: 'PENDING',
@@ -112,9 +125,6 @@ exports.registerTuitionStudent = async (req, res) => {
       lastBilledYear: currentYear,
       lastResetDate: now
     };
-    if (section) {
-      feeData.batchId = section._id;
-    }
     await TuitionFee.create(feeData);
 
     if (classDoc) {
