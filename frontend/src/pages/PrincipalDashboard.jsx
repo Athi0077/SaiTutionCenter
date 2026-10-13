@@ -295,7 +295,7 @@ const PrincipalDashboard = () => {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             <StatCard icon="👥" bgIconClass="bg-blue-100 text-blue-600" borderClass="border-blue-500" trendData={upTrend} strokeColor="#3b82f6" value={totalTuitionStudents} label="Tuition Students" />
-            <StatCard icon="📚" bgIconClass="bg-purple-100 text-purple-600" borderClass="border-purple-500" trendData={stableTrend} strokeColor="#a855f7" value={totalBatches} label="Total Batches" />
+            {/* <StatCard icon="📚" bgIconClass="bg-purple-100 text-purple-600" borderClass="border-purple-500" trendData={stableTrend} strokeColor="#a855f7" value={totalBatches} label="Total Batches" /> */}
             {/* <StatCard icon="📅" bgIconClass="bg-orange-100 text-orange-600" borderClass="border-orange-500" trendData={volatileTrend} strokeColor="#f97316" value={todaysSessions.length} label="Today's Sessions" /> */}
             <StatCard icon="₹" bgIconClass="bg-green-100 text-green-600" borderClass="border-green-500" trendData={upTrend} strokeColor="#22c55e" value={`₹${totalCollected}`} label="Fee Collected" />
             <StatCard icon="⚠️" bgIconClass="bg-red-100 text-red-600" borderClass="border-red-500" trendData={stableTrend} strokeColor="#ef4444" value={`₹${pendingFees}`} label="Pending Fees" />
