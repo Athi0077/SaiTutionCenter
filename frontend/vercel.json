@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://studymate-wbb6.onrender.com/api/$1"
+      "destination": "https://saitutioncenter.onrender.com/api/$1"
     },
     {
       "source": "/(.*)",

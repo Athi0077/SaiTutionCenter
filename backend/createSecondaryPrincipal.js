@@ -9,7 +9,7 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/homework-ap
     
     // Check if secondary principal already exists
     let secondary = await User.findOne({ email: 'secondary@gmail.com' });
-    
+     
     if (secondary) {
       console.log('Secondary Principal already exists.');
     } else { 
