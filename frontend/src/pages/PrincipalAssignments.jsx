@@ -9,7 +9,6 @@ const PrincipalAssignments = () => {
   
   const [selectedTeacher, setSelectedTeacher] = useState('');
   const [selectedStandard, setSelectedStandard] = useState('');
-  const [selectedSection, setSelectedSection] = useState('');
   const [subjectId, setSubjectId] = useState('');
   const [subjects, setSubjects] = useState([]);
   const [editingId, setEditingId] = useState(null);
@@ -35,7 +34,7 @@ const PrincipalAssignments = () => {
 
       let fetchedSubjects = subjectsRes.data.data;
 
-      // Auto-seed default subjects (English, Tamil, Maths, Science, Social) if none in DB
+      // Auto-seed default subjects if none in DB
       if (fetchedSubjects.length === 0) {
         try {
           const seedRes = await api.post('/subjects/seed-defaults');
@@ -68,7 +67,6 @@ const PrincipalAssignments = () => {
         await api.put(`/teacher-assignments/${editingId}`, {
           teacherId: selectedTeacher,
           standardId: selectedStandard,
-          sectionId: selectedSection,
           subjectId
         });
         setSuccess('Teacher assignment updated successfully');
@@ -76,7 +74,6 @@ const PrincipalAssignments = () => {
         await api.post('/teacher-assignments', {
           teacherId: selectedTeacher,
           standardId: selectedStandard,
-          sectionId: selectedSection,
           subjectId
         });
         setSuccess('Teacher assigned successfully');
@@ -92,7 +89,6 @@ const PrincipalAssignments = () => {
     setEditingId(null);
     setSelectedTeacher('');
     setSelectedStandard('');
-    setSelectedSection('');
     setSubjectId('');
     setError('');
   };
@@ -101,7 +97,6 @@ const PrincipalAssignments = () => {
     setEditingId(assignment._id);
     setSelectedTeacher(assignment.teacherId ? (assignment.teacherId._id || assignment.teacherId) : '');
     setSelectedStandard(assignment.standardId ? (assignment.standardId._id || assignment.standardId) : '');
-    setSelectedSection(assignment.sectionId ? (assignment.sectionId._id || assignment.sectionId) : '');
     setSubjectId(assignment.subjectId ? (assignment.subjectId._id || assignment.subjectId) : '');
     window.scrollTo(0, 0);
   };
@@ -117,8 +112,6 @@ const PrincipalAssignments = () => {
       setError(err.response?.data?.message || 'Error removing assignment');
     }
   };
-
-  const activeSections = standards.find(s => s._id === selectedStandard)?.sections || [];
 
   return (
     <Layout>
@@ -148,25 +141,11 @@ const PrincipalAssignments = () => {
               <select 
                 className="w-full p-3 border border-gray-100 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm" 
                 value={selectedStandard} 
-                onChange={e => { setSelectedStandard(e.target.value); setSelectedSection(''); }}
+                onChange={e => setSelectedStandard(e.target.value)}
                 required
               >
                 <option value="">Select Standard</option>
                 {standards.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label className="block mb-2 font-semibold text-gray-700 text-sm">Section</label>
-              <select 
-                className="w-full p-3 border border-gray-100 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm" 
-                value={selectedSection} 
-                onChange={e => setSelectedSection(e.target.value)}
-                required
-                disabled={!selectedStandard}
-              >
-                <option value="">Select Section</option>
-                {activeSections.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
               </select>
             </div>
 
@@ -213,7 +192,7 @@ const PrincipalAssignments = () => {
           <div className="space-y-4">
             {Object.entries(
               assignments.reduce((acc, curr) => {
-                const className = `${curr.standardId?.name || 'Unknown'} - ${curr.sectionId?.name || 'Unknown'}`;
+                const className = curr.standardId?.name || 'Unknown Standard';
                 if (!acc[className]) acc[className] = [];
                 acc[className].push(curr);
                 return acc;

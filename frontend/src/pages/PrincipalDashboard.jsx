@@ -60,24 +60,21 @@ const PrincipalDashboard = () => {
         const res = await api.get('/dashboard/principal');
         setDashboardData(res.data.data);
         
-        const [stdsRes, classesRes, asgRes, usersRes, reqRes, reportsRes, schoolNameRes, sessionRes, feesRes] = await Promise.all([
+        const [stdsRes, asgRes, usersRes, reqRes, reportsRes, schoolNameRes, sessionRes, feesRes, batchesRes] = await Promise.all([
           api.get('/standards'),
-          api.get('/classes').catch(() => ({ data: { data: [] } })),
           api.get('/teacher-assignments'),
           api.get('/users/active-teachers'),
           api.get('/users/pending-teachers'),
           api.get('/reports'),
           api.get('/id-card/school-name').catch(() => ({ data: { schoolName: 'StudyMate School' } })),
           api.get('/tuition-sessions').catch(() => ({ data: { data: [] } })),
-          api.get('/tuition-fees').catch(() => ({ data: { data: [] } }))
+          api.get('/tuition-fees').catch(() => ({ data: { data: [] } })),
+          api.get('/batches').catch(() => ({ data: [] }))
         ]);
-        
-        let secCount = 0;
-        stdsRes.data.data.forEach(s => { secCount += s.sections?.length || 0; });
         
         setStats({
           standards: stdsRes.data.data.length,
-          sections: secCount,
+          sections: 0,
           teachers: usersRes.data.data.length,
           assignments: asgRes.data.data.length
         });
@@ -98,30 +95,11 @@ const PrincipalDashboard = () => {
           setPendingReports(unresolved.slice(0, 4));
         }
 
-        const allClasses = classesRes.data?.data || [];
-        const allSections = [];
-        if (stdsRes.data?.data) {
-          stdsRes.data.data.forEach(std => {
-            std.sections?.forEach(sec => {
-              const matchingClass = allClasses.find(c => 
-                (c.sectionId && (c.sectionId === sec._id || c.sectionId?._id === sec._id || c.sectionId?.toString() === sec._id?.toString())) ||
-                (c.section === sec.name && (c.standard === std.name || c.standardId === std._id || c.standardId?._id === std._id)) ||
-                c.className === `${std.name} - ${sec.name}`
-              );
-              const classStudents = (matchingClass?.students || []).filter(s => s && s.role === 'student');
-              const batchStudents = (sec.students && sec.students.length > 0) ? sec.students : classStudents;
-
-              allSections.push({
-                ...sec,
-                batchName: `${std.name} - ${sec.name}`,
-                students: batchStudents
-              });
-            });
-          });
-        }
+        // Use /batches API directly — no longer derived from sections
+        const allBatches = Array.isArray(batchesRes.data) ? batchesRes.data : (batchesRes.data?.data || []);
 
         setTuitionData({
-          batches: allSections,
+          batches: allBatches,
           sessions: sessionRes.data?.data || [],
           fees: feesRes.data?.data || feesRes.data || []
         });
