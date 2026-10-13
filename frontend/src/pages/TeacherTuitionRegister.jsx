@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import Layout from '../components/layout/Layout';
 import api from '../utils/api';
@@ -6,20 +6,42 @@ import toast from 'react-hot-toast';
 import { UserPlus, IndianRupee } from 'lucide-react';
 
 const TeacherTuitionRegister = () => {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const { currentUser } = useContext(AuthContext);
+  const [standards, setStandards] = useState([]);
   
   const [formData, setFormData] = useState({
     studentId: '',
     name: '',
     password: '',
     gender: 'Male',
+    standardId: '',
     feeAmount: '',
     feePeriod: 'Monthly',
     feeDetails: 'Monthly Tuition'
   });
 
   const currentUserId = currentUser?._id || currentUser?.id;
+
+  useEffect(() => {
+    fetchStandards();
+  }, []);
+
+  const fetchStandards = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/standards');
+      const stds = res.data?.data || [];
+      setStandards(stds);
+      if (stds.length > 0) {
+        setFormData(prev => ({ ...prev, standardId: stds[0]._id }));
+      }
+    } catch (error) {
+      toast.error('Failed to load standards');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -40,6 +62,7 @@ const TeacherTuitionRegister = () => {
         name: '',
         password: '',
         gender: 'Male',
+        standardId: standards.length > 0 ? standards[0]._id : '',
         feeAmount: '',
         feePeriod: 'Monthly',
         feeDetails: 'Monthly Tuition'
@@ -121,6 +144,23 @@ const TeacherTuitionRegister = () => {
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
                   <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Standard <span className="text-red-500">*</span>
+                </label>
+                <select 
+                  required
+                  className="w-full border border-gray-200 dark:border-[#334155] bg-gray-50 dark:bg-[#172235] text-gray-800 dark:text-white rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition" 
+                  value={formData.standardId} 
+                  onChange={(e) => setFormData({ ...formData, standardId: e.target.value })} 
+                >
+                  {standards.length === 0 && <option value="">No standards available</option>}
+                  {standards.map(s => (
+                    <option key={s._id} value={s._id}>{s.name}</option>
+                  ))}
                 </select>
               </div>
             </div>

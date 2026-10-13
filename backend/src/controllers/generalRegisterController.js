@@ -28,17 +28,24 @@ exports.getStudents = async (req, res) => {
 
 exports.registerTuitionStudent = async (req, res) => {
   try {
-    const { studentId, name, password, gender, batchId, feeAmount, feeDetails, feePeriod } = req.body;
+    const { studentId, name, password, gender, batchId, standardId, feeAmount, feeDetails, feePeriod } = req.body;
     
     if (req.user.role !== 'teacher' && req.user.role !== 'principal') {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
     const TuitionFee = require('../models/TuitionFee');
+    const Standard = require('../models/Standard');
 
     const existing = await User.findOne({ studentId });
     if (existing) {
       return res.status(400).json({ success: false, message: 'An account with that Student ID already exists.' });
+    }
+
+    // Resolve standard if standardId is provided
+    let standard = null;
+    if (standardId) {
+      standard = await Standard.findById(standardId);
     }
 
     // Optionally resolve batch/section if batchId is provided
@@ -60,27 +67,32 @@ exports.registerTuitionStudent = async (req, res) => {
       schoolId: req.user.schoolId
     });
 
-    // Find class that corresponds to this section to enroll them (only if section found)
+    // Find class to enroll student — prefer standardId lookup, fallback to section
     let classDoc = null;
-    if (section) {
-      const Class = require('../models/Class');
+    if (standard) {
+      classDoc = await Class.findOne({ 
+        $or: [
+          { standardId: standard._id },
+          { standard: standard.name }
+        ]
+      });
+    } else if (section) {
       classDoc = await Class.findOne({ section: section.name });
-      if (classDoc) {
-        await Class.findByIdAndUpdate(classDoc._id, { $push: { students: newUser._id } });
-        
-        const AcademicYear = require('../models/AcademicYear');
-        const Enrollment = require('../models/Enrollment');
-        const activeYear = await AcademicYear.findOne({ status: 'active' });
-        if (activeYear) {
-          await Enrollment.create({
-            studentId: newUser._id,
-            academicYearId: activeYear._id,
-            classId: classDoc._id,
-            schoolId: req.user.schoolId,
-            type: 'new_admission',
-            status: 'active'
-          });
-        }
+    }
+
+    if (classDoc) {
+      await Class.findByIdAndUpdate(classDoc._id, { $addToSet: { students: newUser._id } });
+      
+      const activeYear = await AcademicYear.findOne({ status: 'active' });
+      if (activeYear) {
+        await Enrollment.create({
+          studentId: newUser._id,
+          academicYearId: activeYear._id,
+          classId: classDoc._id,
+          schoolId: req.user.schoolId,
+          type: 'new_admission',
+          status: 'active'
+        });
       }
     }
 
