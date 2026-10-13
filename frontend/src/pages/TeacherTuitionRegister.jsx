@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import Layout from '../components/layout/Layout';
 import api from '../utils/api';
@@ -6,16 +6,14 @@ import toast from 'react-hot-toast';
 import { UserPlus, IndianRupee } from 'lucide-react';
 
 const TeacherTuitionRegister = () => {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const { currentUser } = useContext(AuthContext);
-  const [batches, setBatches] = useState([]);
   
   const [formData, setFormData] = useState({
     studentId: '',
     name: '',
     password: '',
     gender: 'Male',
-    batchId: '',
     feeAmount: '',
     feePeriod: 'Monthly',
     feeDetails: 'Monthly Tuition'
@@ -23,39 +21,10 @@ const TeacherTuitionRegister = () => {
 
   const currentUserId = currentUser?._id || currentUser?.id;
 
-  useEffect(() => {
-    fetchBatches();
-  }, []);
-
-  const fetchBatches = async () => {
-    try {
-      setLoading(true);
-      const stdsRes = await api.get('/standards');
-      
-      const allSections = [];
-      if (stdsRes.data?.data) {
-        stdsRes.data.data.forEach(std => {
-          std.sections?.forEach(sec => {
-            allSections.push({ ...sec, batchName: `${std.name} - ${sec.name}` });
-          });
-        });
-      }
-      setBatches(allSections);
-      
-      if (allSections.length > 0) {
-        setFormData(prev => ({ ...prev, batchId: allSections[0]._id }));
-      }
-    } catch (error) {
-      toast.error('Failed to load batches');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleRegister = async (e) => {
     e.preventDefault();
 
-    if (!formData.studentId.trim() || !formData.name.trim() || !formData.password.trim() || !formData.batchId || !formData.feeAmount || !formData.feeDetails.trim()) {
+    if (!formData.studentId.trim() || !formData.name.trim() || !formData.password.trim() || !formData.feeAmount || !formData.feeDetails.trim()) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -71,7 +40,6 @@ const TeacherTuitionRegister = () => {
         name: '',
         password: '',
         gender: 'Male',
-        batchId: batches.length > 0 ? batches[0]._id : '',
         feeAmount: '',
         feePeriod: 'Monthly',
         feeDetails: 'Monthly Tuition'
@@ -155,22 +123,6 @@ const TeacherTuitionRegister = () => {
                   <option value="Other">Other</option>
                 </select>
               </div>
-
-              {/* <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Tuition Batch <span className="text-red-500">*</span>
-                </label>
-                <select 
-                  className="w-full border border-gray-200 dark:border-[#334155] bg-gray-50 dark:bg-[#172235] text-gray-800 dark:text-white rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition" 
-                  value={formData.batchId} 
-                  onChange={(e) => setFormData({ ...formData, batchId: e.target.value })} 
-                >
-                  {batches.length === 0 && <option value="">No batches available</option>}
-                  {batches.map(c => (
-                    <option key={c._id} value={c._id}>{c.batchName}</option>
-                  ))}
-                </select>
-              </div> */}
             </div>
 
             <div className="border-t border-gray-200 dark:border-[#1E293B] pt-6 mt-6">

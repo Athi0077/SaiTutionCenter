@@ -34,17 +34,18 @@ exports.registerTuitionStudent = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
-    const Section = require('../models/Section');
     const TuitionFee = require('../models/TuitionFee');
-
-    const section = await Section.findById(batchId);
-    if (!section) {
-      return res.status(404).json({ success: false, message: 'Batch not found' });
-    }
 
     const existing = await User.findOne({ studentId });
     if (existing) {
       return res.status(400).json({ success: false, message: 'An account with that Student ID already exists.' });
+    }
+
+    // Optionally resolve batch/section if batchId is provided
+    let section = null;
+    if (batchId) {
+      const Section = require('../models/Section');
+      section = await Section.findById(batchId);
     }
 
     // Create user without grNumber
@@ -59,24 +60,27 @@ exports.registerTuitionStudent = async (req, res) => {
       schoolId: req.user.schoolId
     });
 
-    // Find class that corresponds to this section to enroll them
-    const Class = require('../models/Class');
-    const classDoc = await Class.findOne({ section: section.name });
-    if (classDoc) {
-      await Class.findByIdAndUpdate(classDoc._id, { $push: { students: newUser._id } });
-      
-      const AcademicYear = require('../models/AcademicYear');
-      const Enrollment = require('../models/Enrollment');
-      const activeYear = await AcademicYear.findOne({ status: 'active' });
-      if (activeYear) {
-        await Enrollment.create({
-          studentId: newUser._id,
-          academicYearId: activeYear._id,
-          classId: classDoc._id,
-          schoolId: req.user.schoolId,
-          type: 'new_admission',
-          status: 'active'
-        });
+    // Find class that corresponds to this section to enroll them (only if section found)
+    let classDoc = null;
+    if (section) {
+      const Class = require('../models/Class');
+      classDoc = await Class.findOne({ section: section.name });
+      if (classDoc) {
+        await Class.findByIdAndUpdate(classDoc._id, { $push: { students: newUser._id } });
+        
+        const AcademicYear = require('../models/AcademicYear');
+        const Enrollment = require('../models/Enrollment');
+        const activeYear = await AcademicYear.findOne({ status: 'active' });
+        if (activeYear) {
+          await Enrollment.create({
+            studentId: newUser._id,
+            academicYearId: activeYear._id,
+            classId: classDoc._id,
+            schoolId: req.user.schoolId,
+            type: 'new_admission',
+            status: 'active'
+          });
+        }
       }
     }
 
@@ -86,9 +90,8 @@ exports.registerTuitionStudent = async (req, res) => {
     const period = (feePeriod === 'Yearly' || feePeriod === 'Year') ? 'Yearly' : 'Monthly';
 
     // Automatically create TuitionFee record
-    await TuitionFee.create({
+    const feeData = {
       studentId: newUser._id,
-      batchId: section._id,
       totalAmount: Number(feeAmount),
       feePeriod: period,
       feeDetails: feeDetails || (period === 'Yearly' ? 'Yearly Tuition Fee' : 'Monthly Tuition Fee'),
@@ -96,7 +99,11 @@ exports.registerTuitionStudent = async (req, res) => {
       lastBilledMonth: currentMonthKey,
       lastBilledYear: currentYear,
       lastResetDate: now
-    });
+    };
+    if (section) {
+      feeData.batchId = section._id;
+    }
+    await TuitionFee.create(feeData);
 
     if (classDoc) {
       const FeeStatus = require('../models/FeeStatus');

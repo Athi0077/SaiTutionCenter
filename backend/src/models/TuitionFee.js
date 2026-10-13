@@ -10,7 +10,8 @@ const tuitionFeeSchema = new mongoose.Schema(
     batchId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Section",
-      required: true,
+      required: false,
+      default: null,
     },
     feePeriod: {
       type: String,
