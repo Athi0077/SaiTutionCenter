@@ -1,15 +1,14 @@
 const TeacherAssignment = require("../models/TeacherAssignment");
 const Standard = require("../models/Standard");
-const Section = require("../models/Section");
 const User = require("../models/User");
 const Class = require("../models/Class");
 const { createNotification } = require("../services/notificationService");
 
 exports.assignTeacher = async (req, res) => {
   try {
-    const { teacherId, standardId, sectionId, subjectId, isClassTeacher } = req.body;
+    const { teacherId, standardId, subjectId, isClassTeacher } = req.body;
 
-    if (!teacherId || !standardId || !sectionId) {
+    if (!teacherId || !standardId) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
@@ -19,42 +18,37 @@ exports.assignTeacher = async (req, res) => {
     }
 
     const standard = await Standard.findById(standardId);
-    const section = await Section.findOne({ _id: sectionId, standardId });
-
-    if (!standard || !section) {
-      return res.status(400).json({ success: false, message: "Invalid standard or section" });
+    if (!standard) {
+      return res.status(400).json({ success: false, message: "Invalid standard" });
     }
 
-    // Any teacher can be assigned to the standard and section without Class Teacher exclusivity
-
-    // Check if assignment already exists
-    const exists = await TeacherAssignment.findOne({ teacherId, standardId, sectionId });
+    // Check if assignment already exists (teacher + standard + subject)
+    const query = { teacherId, standardId };
+    if (subjectId) query.subjectId = subjectId;
+    const exists = await TeacherAssignment.findOne(query);
     if (exists) {
-      return res.status(400).json({ success: false, message: "Teacher is already assigned to this standard and section" });
+      return res.status(400).json({ success: false, message: "Teacher is already assigned to this standard for this subject" });
     }
 
     let subjectName = "";
     if (subjectId) {
       const Subject = require("../models/Subject");
       const subjectDoc = await Subject.findById(subjectId);
-      if (subjectDoc) {
-        subjectName = subjectDoc.name;
-      }
+      if (subjectDoc) subjectName = subjectDoc.name;
     }
 
     const assignment = await TeacherAssignment.create({
       teacherId,
       standardId,
-      sectionId,
       subject: subjectName,
       subjectId,
       isClassTeacher: Boolean(isClassTeacher),
       assignedBy: req.user._id
     });
 
-    // Sync with existing Class model for backwards compatibility
-    const className = `${standard.name} - ${section.name}`;
-    let existingClass = await Class.findOne({ standardId, sectionId });
+    // Sync with Class model for backwards compatibility
+    const className = standard.name;
+    let existingClass = await Class.findOne({ standardId });
     if (!existingClass) {
       existingClass = await Class.findOne({ className });
     }
@@ -62,8 +56,6 @@ exports.assignTeacher = async (req, res) => {
       existingClass = await Class.create({
         standard: standard.name,
         standardId,
-        section: section.name,
-        sectionId,
         className,
         teacherId,
         status: "active",
@@ -71,18 +63,13 @@ exports.assignTeacher = async (req, res) => {
       });
     } else {
       existingClass.standardId = standardId;
-      existingClass.sectionId = sectionId;
-      if (isClassTeacher) {
-        existingClass.teacherId = teacherId;
-      }
+      if (isClassTeacher) existingClass.teacherId = teacherId;
       await existingClass.save();
     }
 
-    if (subjectId) {
-      if (!existingClass.subjects.includes(subjectId)) {
-        existingClass.subjects.push(subjectId);
-        await existingClass.save();
-      }
+    if (subjectId && !existingClass.subjects.includes(subjectId)) {
+      existingClass.subjects.push(subjectId);
+      await existingClass.save();
     }
 
     await createNotification({
@@ -104,7 +91,6 @@ exports.getAssignments = async (req, res) => {
     const assignments = await TeacherAssignment.find()
       .populate("teacherId", "name email")
       .populate("standardId", "name")
-      .populate("sectionId", "name")
       .populate("subjectId", "name")
       .populate("assignedBy", "name");
     res.json({ success: true, data: assignments });
@@ -118,7 +104,6 @@ exports.getTeacherAssignments = async (req, res) => {
     const teacherId = req.params.teacherId;
     const assignments = await TeacherAssignment.find({ teacherId })
       .populate("standardId", "name")
-      .populate("sectionId", "name")
       .populate("subjectId", "name");
     res.json({ success: true, data: assignments });
   } catch (error) {
@@ -129,16 +114,15 @@ exports.getTeacherAssignments = async (req, res) => {
 exports.removeAssignment = async (req, res) => {
   try {
     const assignment = await TeacherAssignment.findById(req.params.id)
-      .populate("standardId")
-      .populate("sectionId");
-      
+      .populate("standardId");
+
     if (!assignment) return res.status(404).json({ success: false, message: "Assignment not found" });
 
-    const className = `${assignment.standardId.name} - ${assignment.sectionId.name}`;
-    
+    const className = assignment.standardId?.name || "Unknown";
+
     if (assignment.isClassTeacher) {
       await Class.findOneAndUpdate(
-        { className, teacherId: assignment.teacherId },
+        { standardId: assignment.standardId, teacherId: assignment.teacherId },
         { $unset: { teacherId: 1 } }
       );
     }
@@ -161,10 +145,10 @@ exports.removeAssignment = async (req, res) => {
 
 exports.updateAssignment = async (req, res) => {
   try {
-    const { teacherId, standardId, sectionId, subjectId, isClassTeacher } = req.body;
+    const { teacherId, standardId, subjectId, isClassTeacher } = req.body;
     const assignmentId = req.params.id;
 
-    if (!teacherId || !standardId || !sectionId) {
+    if (!teacherId || !standardId) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
@@ -174,62 +158,49 @@ exports.updateAssignment = async (req, res) => {
     }
 
     const standard = await Standard.findById(standardId);
-    const section = await Section.findOne({ _id: sectionId, standardId });
-    if (!standard || !section) {
-      return res.status(400).json({ success: false, message: "Invalid standard or section" });
+    if (!standard) {
+      return res.status(400).json({ success: false, message: "Invalid standard" });
     }
 
-    // Any teacher can be assigned without Class Teacher exclusivity
-
-    const exists = await TeacherAssignment.findOne({ 
-      teacherId, 
-      standardId, 
-      sectionId,
-      _id: { $ne: assignmentId }
-    });
+    // Duplicate check
+    const query = { teacherId, standardId, _id: { $ne: assignmentId } };
+    if (subjectId) query.subjectId = subjectId;
+    const exists = await TeacherAssignment.findOne(query);
     if (exists) {
       return res.status(400).json({ success: false, message: "Teacher is already assigned to this class." });
     }
 
-    // Cleanup old class logic if standard/section changed
-    const oldClassName = `${(await Standard.findById(assignment.standardId)).name} - ${(await Section.findById(assignment.sectionId)).name}`;
+    // Cleanup old class if class teacher changed
     if (assignment.isClassTeacher) {
-       await Class.findOneAndUpdate(
-         { className: oldClassName, teacherId: assignment.teacherId },
-         { $unset: { teacherId: 1 } }
-       );
+      await Class.findOneAndUpdate(
+        { standardId: assignment.standardId, teacherId: assignment.teacherId },
+        { $unset: { teacherId: 1 } }
+      );
     }
 
     let subjectName = "";
     if (subjectId) {
       const Subject = require("../models/Subject");
       const subjectDoc = await Subject.findById(subjectId);
-      if (subjectDoc) {
-        subjectName = subjectDoc.name;
-      }
+      if (subjectDoc) subjectName = subjectDoc.name;
     }
 
-    // Update assignment
     assignment.teacherId = teacherId;
     assignment.standardId = standardId;
-    assignment.sectionId = sectionId;
+    assignment.sectionId = undefined;
     assignment.subject = subjectName;
     assignment.subjectId = subjectId;
     assignment.isClassTeacher = Boolean(isClassTeacher);
     await assignment.save();
 
-    // Sync with existing Class model for backwards compatibility
-    const className = `${standard.name} - ${section.name}`;
-    let existingClass = await Class.findOne({ standardId, sectionId });
-    if (!existingClass) {
-      existingClass = await Class.findOne({ className });
-    }
+    // Sync with Class model
+    const className = standard.name;
+    let existingClass = await Class.findOne({ standardId });
+    if (!existingClass) existingClass = await Class.findOne({ className });
     if (!existingClass) {
       existingClass = await Class.create({
         standard: standard.name,
         standardId,
-        section: section.name,
-        sectionId,
         className,
         teacherId,
         status: "active",
@@ -237,18 +208,13 @@ exports.updateAssignment = async (req, res) => {
       });
     } else {
       existingClass.standardId = standardId;
-      existingClass.sectionId = sectionId;
-      if (isClassTeacher) {
-        existingClass.teacherId = teacherId;
-      }
+      if (isClassTeacher) existingClass.teacherId = teacherId;
       await existingClass.save();
     }
 
-    if (subjectId) {
-      if (!existingClass.subjects.includes(subjectId)) {
-        existingClass.subjects.push(subjectId);
-        await existingClass.save();
-      }
+    if (subjectId && !existingClass.subjects.includes(subjectId)) {
+      existingClass.subjects.push(subjectId);
+      await existingClass.save();
     }
 
     res.json({ success: true, message: "Assignment updated successfully", data: assignment });
@@ -256,4 +222,3 @@ exports.updateAssignment = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
