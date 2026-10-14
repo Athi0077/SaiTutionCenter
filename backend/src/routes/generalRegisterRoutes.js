@@ -9,6 +9,10 @@ router.post('/tuition-students/register', protect, generalRegisterController.reg
 // Route to get students
 router.get('/students', protect, generalRegisterController.getStudents);
 
+// Route to update a student
+router.put('/students/:id', protect, generalRegisterController.updateStudent);
 
+// Route to delete a student
+router.delete('/students/:id', protect, generalRegisterController.deleteStudent);
 
 module.exports = router;
