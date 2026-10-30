@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/layout/Layout';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
+import { Search, X, Loader2 } from 'lucide-react';
 
 const PrincipalParents = () => {
   const [parents, setParents] = useState([]);
-  const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedStudents, setSelectedStudents] = useState([]);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
   
   // Form State
   const [showModal, setShowModal] = useState(false);
@@ -24,15 +27,36 @@ const PrincipalParents = () => {
     fetchData();
   }, []);
 
+  // Search students on-demand with debounce
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await api.get(`/users/students?search=${encodeURIComponent(trimmed)}`);
+        setSearchResults(res.data?.data || (Array.isArray(res.data) ? res.data : []));
+      } catch (err) {
+        console.error('Failed to search students:', err);
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [parentsRes, studentsRes] = await Promise.all([
-        api.get('/parents'),
-        api.get('/users/students')
-      ]);
-      setParents(parentsRes.data.data || []);
-      setStudents(studentsRes.data.data || []);
+      const parentsRes = await api.get('/parents');
+      setParents(parentsRes.data?.data || (Array.isArray(parentsRes.data) ? parentsRes.data : []));
     } catch (err) {
       toast.error('Failed to load data');
     } finally {
@@ -44,7 +68,8 @@ const PrincipalParents = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleStudentToggle = (studentId) => {
+  const handleStudentToggle = (student) => {
+    const studentId = student._id;
     setFormData(prev => {
       const isSelected = prev.childrenIds.includes(studentId);
       if (isSelected) {
@@ -53,16 +78,29 @@ const PrincipalParents = () => {
         return { ...prev, childrenIds: [...prev.childrenIds, studentId] };
       }
     });
+
+    setSelectedStudents(prev => {
+      const exists = prev.some(s => s._id === student._id);
+      if (exists) {
+        return prev.filter(s => s._id !== student._id);
+      } else {
+        return [...prev, student];
+      }
+    });
   };
 
   const handleEdit = (parent) => {
+    const children = parent.children || [];
     setFormData({
       name: parent.name,
       mobileNumber: parent.mobileNumber || parent.phone || '',
       email: parent.email || '',
       password: '', // Leave empty for edit
-      childrenIds: parent.children ? parent.children.map(c => c._id) : []
+      childrenIds: children.map(c => c._id)
     });
+    setSelectedStudents(children);
+    setSearchResults([]);
+    setSearchQuery('');
     setEditParentId(parent._id);
     setShowModal(true);
   };
@@ -109,6 +147,8 @@ const PrincipalParents = () => {
       }
       setShowModal(false);
       setFormData({ name: '', mobileNumber: '', email: '', password: '', childrenIds: [] });
+      setSelectedStudents([]);
+      setSearchResults([]);
       setEditParentId(null);
       setSearchQuery('');
       fetchData();
@@ -119,7 +159,10 @@ const PrincipalParents = () => {
 
   const openNewModal = () => {
     setFormData({ name: '', mobileNumber: '', email: '', password: '', childrenIds: [] });
+    setSelectedStudents([]);
+    setSearchResults([]);
     setEditParentId(null);
+    setSearchQuery('');
     setShowModal(true);
   };
 
@@ -242,58 +285,127 @@ const PrincipalParents = () => {
                   </div>
 
                   <div className="pt-2">
-                    <label className="block text-sm font-bold mb-2 text-gray-700">
-                      Link Students <span className="text-red-500">*</span>
-                    </label>
-                    <input 
-                      type="text" 
-                      placeholder="Search students by name or ID..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full p-2 mb-2 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-sm bg-gray-50"
-                    />
-                    <div className="bg-gray-50 border rounded-lg p-2 max-h-48 overflow-y-auto space-y-1">
-                      {/* Always show selected students */}
-                      {students.filter(s => formData.childrenIds.includes(s._id)).map(student => (
-                        <label key={student._id} className="flex items-center gap-3 p-2 bg-green-50 rounded cursor-pointer border border-green-200 transition">
-                          <input 
-                            type="checkbox" 
-                            className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
-                            checked={true}
-                            onChange={() => handleStudentToggle(student._id)}
-                          />
-                          <div>
-                            <p className="font-semibold text-sm text-green-800">{student.name}</p>
-                            <p className="text-xs text-green-600 font-mono">ID: {student.studentId || 'N/A'}</p>
-                          </div>
-                        </label>
-                      ))}
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-bold text-gray-700">
+                        Link Students <span className="text-red-500">*</span>
+                      </label>
+                      {formData.childrenIds.length > 0 && (
+                        <span className="text-xs font-semibold px-2.5 py-0.5 bg-green-100 text-green-700 rounded-full">
+                          {formData.childrenIds.length} Linked
+                        </span>
+                      )}
+                    </div>
 
-                      {/* Show search results (max 5), excluding already selected */}
-                      {searchQuery.trim() !== '' ? (
-                        students
-                          .filter(s => !formData.childrenIds.includes(s._id))
-                          .filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.studentId?.toLowerCase().includes(searchQuery.toLowerCase()))
-                          .slice(0, 5)
-                          .map(student => (
-                            <label key={student._id} className="flex items-center gap-3 p-2 hover:bg-white rounded cursor-pointer border border-transparent hover:border-gray-200 transition">
+                    {/* Search Input with Icon and Clear Button */}
+                    <div className="relative mb-2">
+                      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input 
+                        type="text" 
+                        placeholder="Search student by name, roll no or ID..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-9 pr-8 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-sm bg-gray-50"
+                      />
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="bg-gray-50 border rounded-lg p-2 max-h-56 overflow-y-auto space-y-1 custom-scrollbar">
+                      {/* 1. Selected Students */}
+                      {selectedStudents.length > 0 && (
+                        <div className="mb-2">
+                          <p className="text-[11px] font-bold text-green-700 uppercase tracking-wider px-1 mb-1">
+                            Selected Students ({selectedStudents.length}):
+                          </p>
+                          {selectedStudents.map(student => (
+                            <label key={student._id} className="flex items-center gap-3 p-2 bg-green-50/80 rounded cursor-pointer border border-green-200 transition mb-1">
                               <input 
                                 type="checkbox" 
                                 className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
-                                checked={false}
-                                onChange={() => handleStudentToggle(student._id)}
+                                checked={formData.childrenIds.includes(student._id)}
+                                onChange={() => handleStudentToggle(student)}
                               />
-                              <div>
-                                <p className="font-semibold text-sm">{student.name}</p>
-                                <p className="text-xs text-gray-500 font-mono">ID: {student.studentId || 'N/A'}</p>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-sm text-green-800 truncate">{student.name}</p>
+                                <p className="text-xs text-green-600 font-mono">ID: {student.studentId || student.rollNumber || 'N/A'}</p>
                               </div>
                             </label>
-                          ))
-                      ) : (
-                        formData.childrenIds.length === 0 && (
-                          <p className="text-sm text-gray-500 p-2 italic text-center">Type in the search box to find students.</p>
-                        )
+                          ))}
+                        </div>
                       )}
+
+                      {/* 2. Available / Search Results */}
+                      {(() => {
+                        const trimmed = searchQuery.trim();
+
+                        if (!trimmed) {
+                          return (
+                            <div className="p-4 text-center text-sm text-gray-500 flex flex-col items-center justify-center gap-1 py-5">
+                              <Search size={20} className="text-gray-400 mb-0.5" />
+                              <p className="font-medium text-gray-700">Search student to link</p>
+                              <p className="text-xs text-gray-400">Type student name or ID (e.g. ST001) in the box above</p>
+                            </div>
+                          );
+                        }
+
+                        if (searching) {
+                          return (
+                            <div className="p-4 text-center text-sm text-gray-500 flex items-center justify-center gap-2 py-6">
+                              <Loader2 size={16} className="animate-spin text-green-600" />
+                              <span>Searching students...</span>
+                            </div>
+                          );
+                        }
+
+                        const unselectedResults = searchResults.filter(s => !formData.childrenIds.includes(s._id));
+
+                        if (searchResults.length === 0) {
+                          return (
+                            <div className="p-4 text-center text-sm text-gray-400 italic py-6">
+                              No students found matching "{searchQuery}"
+                            </div>
+                          );
+                        }
+
+                        if (unselectedResults.length === 0) {
+                          return (
+                            <div className="p-4 text-center text-sm text-gray-400 italic py-6">
+                              Matching student(s) already selected above.
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div>
+                            {selectedStudents.length > 0 && (
+                              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1 my-1">
+                                Search Results ({unselectedResults.length}):
+                              </p>
+                            )}
+                            {unselectedResults.map(student => (
+                              <label key={student._id} className="flex items-center gap-3 p-2 hover:bg-white rounded cursor-pointer border border-transparent hover:border-gray-200 transition">
+                                <input 
+                                  type="checkbox" 
+                                  className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                                  checked={false}
+                                  onChange={() => handleStudentToggle(student)}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold text-sm text-gray-800 truncate">{student.name}</p>
+                                  <p className="text-xs text-gray-500 font-mono">ID: {student.studentId || student.rollNumber || 'N/A'}</p>
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </form>

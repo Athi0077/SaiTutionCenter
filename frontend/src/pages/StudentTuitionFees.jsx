@@ -28,6 +28,19 @@ const StudentTuitionFees = () => {
     if (currentUser?._id) {
       fetchFees();
     }
+
+    import('../services/socket').then(({ getSocket }) => {
+      const socket = getSocket();
+      if (socket) {
+        const handleRefresh = () => fetchFees();
+        socket.on('fee_status_updated', handleRefresh);
+        socket.on('notification:new', handleRefresh);
+        return () => {
+          socket.off('fee_status_updated', handleRefresh);
+          socket.off('notification:new', handleRefresh);
+        };
+      }
+    });
   }, [currentUser]);
 
   const totalBilled = fees.reduce((acc, curr) => acc + (curr.totalAmount || 0), 0);

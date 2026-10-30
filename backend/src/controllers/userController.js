@@ -150,19 +150,30 @@ const updateProfile = async (req, res) => {
   }
 };
 
-// @desc    Get all students
+// @desc    Get all students or search students by name or ID
 // @route   GET /api/users/students
 // @access  Private
 const getStudents = async (req, res) => {
   try {
+    const { search } = req.query;
     let query = { role: "student" };
-    if (req.user && req.user.role === "teacher") {
-      const { getTeacherClasses } = require("../utils/teacherClassHelper");
-      const teacherClasses = await getTeacherClasses(req.user._id, "students");
-      const studentIds = teacherClasses.flatMap(c => c.students || []);
-      query = { role: "student", _id: { $in: studentIds } };
+
+    if (search && search.trim()) {
+      const escaped = search.trim().replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+      const searchRegex = new RegExp(escaped, "i");
+      query.$or = [
+        { name: searchRegex },
+        { studentId: searchRegex },
+        { rollNumber: searchRegex },
+        { email: searchRegex }
+      ];
     }
-    const students = await User.find(query).select("-password");
+
+    const students = await User.find(query)
+      .select("-password")
+      .sort({ name: 1 })
+      .limit(search ? 50 : 200);
+
     res.json({ success: true, data: students });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

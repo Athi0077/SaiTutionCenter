@@ -3,7 +3,7 @@ import Layout from '../components/layout/Layout';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import ChatRoom from '../components/common/ChatRoom';
-import { Search, Sparkles, User, Key, CheckCircle, Clock, UserPlus, Calendar, Trash2, Plus } from 'lucide-react';
+import { Search, Sparkles, User, Key, CheckCircle, Clock, UserPlus, Calendar, Trash2, Plus, ChevronDown, RefreshCw, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const TeacherClassDetails = () => {
@@ -69,7 +69,7 @@ const TeacherClassDetails = () => {
     setFeeLoading((prev) => ({ ...prev, [studentId]: true }));
     setFeeToast(null);
     try {
-      const res = await api.put(`/fee-status/student/${studentId}`, { feeStatus: newStatus });
+      const res = await api.put(`/fee-status/student/${studentId}`, { feeStatus: newStatus, classId });
       if (res.data.success) {
         setFeeStatuses((prev) => ({
           ...prev,
@@ -79,10 +79,14 @@ const TeacherClassDetails = () => {
             statusUpdatedAt: new Date().toISOString(),
           },
         }));
-        setFeeToast({ type: 'success', message: `Fee status updated to "${newStatus}"` });
+        const statusLabel = newStatus === 'completed' ? 'Completed' : 'Pending';
+        toast.success(`Fee status updated to "${statusLabel}"!`);
+        setFeeToast({ type: 'success', message: `Fee status updated to "${statusLabel}"` });
       }
     } catch (err) {
-      setFeeToast({ type: 'error', message: err.response?.data?.message || 'Failed to update fee status' });
+      const errMsg = err.response?.data?.message || 'Failed to update fee status';
+      toast.error(errMsg);
+      setFeeToast({ type: 'error', message: errMsg });
     } finally {
       setFeeLoading((prev) => ({ ...prev, [studentId]: false }));
     }
@@ -278,7 +282,7 @@ const TeacherClassDetails = () => {
                   <tr>
                     <th className="p-3 w-10 text-center">#</th>
                     <th className="p-3 whitespace-nowrap min-w-[200px]">Student Info</th>
-                    <th className="p-3 whitespace-nowrap w-44">Fee Status</th>
+                    <th className="p-3 whitespace-nowrap w-48">Fee Status</th>
                     <th className="p-3 whitespace-nowrap text-right w-full">Actions</th>
                   </tr>
                 </thead>
@@ -311,23 +315,49 @@ const TeacherClassDetails = () => {
                         <div className="text-gray-400 text-[10px] mt-0.5 font-mono">ID: {student.studentId || 'N/A'}</div>
                       </td>
                       <td className="p-3">
-                        <div className="relative w-36">
-                          <select
-                            id={`fee-status-${student._id}`}
-                            value={status}
+                        <div className="flex items-center gap-1.5">
+                          <div className="relative w-32">
+                            <select
+                              id={`fee-status-${student._id}`}
+                              value={status}
+                              disabled={isUpdating}
+                              onChange={(e) => handleFeeStatusChange(student._id, e.target.value)}
+                              className={`text-[11px] font-extrabold px-2.5 py-1.5 rounded-xl border cursor-pointer transition-all appearance-none pr-7 w-full shadow-xs ${
+                                status === 'completed'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:border-emerald-500 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                                  : 'bg-amber-50 text-amber-800 border-amber-300 hover:border-amber-500 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                              } ${isUpdating ? 'opacity-60 cursor-wait' : ''}`}
+                            >
+                              <option value="pending">⏳ Pending</option>
+                              <option value="completed">✅ Completed</option>
+                            </select>
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 dark:text-slate-400">
+                              {isUpdating ? (
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin text-gray-600" />
+                              ) : (
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Quick 1-click Toggle Action Button */}
+                          <button
+                            type="button"
                             disabled={isUpdating}
-                            onChange={(e) => handleFeeStatusChange(student._id, e.target.value)}
-                            className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg border cursor-pointer transition-all appearance-none pr-6 w-full
-                              ${status === 'completed'
-                                ? 'bg-green-50 text-green-700 border-green-200 hover:border-green-400'
-                                : 'bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-400'
-                              }
-                              ${isUpdating ? 'opacity-60 cursor-wait' : ''}
-                            `}
+                            onClick={() => handleFeeStatusChange(student._id, status === 'completed' ? 'pending' : 'completed')}
+                            title={status === 'completed' ? 'Click to mark as Pending' : 'Click to mark as Completed'}
+                            className={`p-1.5 rounded-xl border transition shadow-xs flex items-center justify-center shrink-0 ${
+                              status === 'completed'
+                                ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border-emerald-300 dark:bg-emerald-900/50 dark:text-emerald-200'
+                                : 'bg-amber-100 hover:bg-amber-200 text-amber-700 border-amber-300 dark:bg-amber-900/50 dark:text-amber-200'
+                            }`}
                           >
-                            <option value="pending">⏳ Pending</option>
-                            <option value="completed">✅ Completed</option>
-                          </select>
+                            {status === 'completed' ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                            ) : (
+                              <Clock className="w-3.5 h-3.5 text-amber-700" />
+                            )}
+                          </button>
                         </div>
                       </td>
                       <td className="p-3 text-right">

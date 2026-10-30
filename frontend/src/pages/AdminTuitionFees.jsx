@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useMemo } from 'react';
 import api from '../utils/api';
 import Layout from '../components/layout/Layout';
 import { AuthContext } from '../context/AuthContext';
-import { IndianRupee, Users, CheckCircle, Clock, ChevronRight, Edit3, X, Check, ArrowLeft } from 'lucide-react';
+import { IndianRupee, Users, CheckCircle, Clock, ChevronRight, Edit3, X, Check, ArrowLeft, MessageCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -163,6 +163,29 @@ const AdminTuitionFees = () => {
   const totalCollectedRupees = fees.reduce((acc, curr) => acc + (curr.paidAmount || (curr.status === 'COMPLETED' || curr.status === 'Paid' ? curr.totalAmount : 0)), 0);
   const totalPendingRupees = fees.reduce((acc, curr) => acc + Math.max(0, (curr.totalAmount || 0) - (curr.paidAmount || (curr.status === 'COMPLETED' || curr.status === 'Paid' ? curr.totalAmount : 0))), 0);
 
+  const getParentPhone = (fee) => {
+    if (fee.linkedParents && fee.linkedParents.length > 0 && fee.linkedParents[0].phone) {
+      return fee.linkedParents[0].phone;
+    }
+    if (fee.studentId?.contactDetails?.parentPhone) {
+      return fee.studentId.contactDetails.parentPhone;
+    }
+    if (fee.studentId?.phone) {
+      return fee.studentId.phone;
+    }
+    return null;
+  };
+
+  const getParentName = (fee) => {
+    if (fee.linkedParents && fee.linkedParents.length > 0 && fee.linkedParents[0].name) {
+      return fee.linkedParents.map(p => p.name).join(', ');
+    }
+    if (fee.studentId?.contactDetails?.parentName) {
+      return fee.studentId.contactDetails.parentName;
+    }
+    return null;
+  };
+
   // Quick toggle between COMPLETED and PENDING
   const handleToggleStatus = async (fee) => {
     const isCompleted = fee.status === 'COMPLETED' || fee.status === 'Paid';
@@ -181,8 +204,18 @@ const AdminTuitionFees = () => {
     }));
 
     try {
-      await api.put(`/tuition-fees/${fee._id}/status`, { status: newStatus });
-      toast.success(newStatus === 'COMPLETED' ? 'Marked as Completed! 🎉' : 'Marked as Pending! ⏳');
+      const res = await api.put(`/tuition-fees/${fee._id}/status`, { status: newStatus });
+      if (newStatus === 'COMPLETED') {
+        const count = res.data?.notifiedParentsCount || 0;
+        if (count > 0) {
+          toast.success(`Marked as Completed! 🎉 Message & notification sent to ${count} linked parent(s).`, { duration: 5000 });
+        } else {
+          toast.success('Marked as Completed! 🎉 Notification sent.', { duration: 4000 });
+        }
+      } else {
+        toast.success('Marked as Pending! ⏳');
+      }
+      fetchData();
     } catch (err) {
       toast.error('Failed to update fee status');
       fetchData(); // Rollback on failure
@@ -203,8 +236,17 @@ const AdminTuitionFees = () => {
   const handleUpdateSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.put(`/tuition-fees/${editingFee._id}/status`, updateData);
-      toast.success('Fee updated successfully');
+      const res = await api.put(`/tuition-fees/${editingFee._id}/status`, updateData);
+      if (updateData.status === 'COMPLETED') {
+        const count = res.data?.notifiedParentsCount || 0;
+        if (count > 0) {
+          toast.success(`Fee updated to Completed! Message & notification sent to ${count} linked parent(s). 🎉`, { duration: 5000 });
+        } else {
+          toast.success('Fee updated successfully');
+        }
+      } else {
+        toast.success('Fee updated successfully');
+      }
       setShowUpdateModal(false);
       fetchData();
     } catch (err) {
@@ -380,6 +422,15 @@ const AdminTuitionFees = () => {
                             <td className="p-4">
                               <span className="font-semibold text-gray-800 dark:text-gray-200">{fee.studentId?.name || 'Unknown'}</span>
                               <div className="text-xs text-gray-500 font-mono mt-0.5">{fee.studentId?.studentId || fee.studentId?.rollNumber || ''}</div>
+                              {getParentName(fee) ? (
+                                <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1 flex-wrap">
+                                  <span className="font-semibold text-gray-600 dark:text-gray-300">Parent:</span>
+                                  <span className="truncate max-w-[130px] font-medium text-gray-700 dark:text-gray-200">{getParentName(fee)}</span>
+                                  {getParentPhone(fee) && <span className="text-[10px] text-gray-400">({getParentPhone(fee)})</span>}
+                                </div>
+                              ) : (
+                                <div className="text-[10px] text-amber-500 dark:text-amber-400 mt-1 font-medium">No parent linked</div>
+                              )}
                             </td>
                             <td className="p-4">
                               <div className="font-bold text-gray-800 dark:text-gray-200 text-base">
@@ -407,7 +458,22 @@ const AdminTuitionFees = () => {
                               )}
                             </td>
                             <td className="p-4 text-right">
-                              <div className="flex items-center justify-end gap-2">
+                              <div className="flex items-center justify-end gap-2 flex-wrap">
+                                {/* Direct WhatsApp message button to linked parent */}
+                                {getParentPhone(fee) && (
+                                  <a
+                                    href={`https://wa.me/91${getParentPhone(fee).replace(/\D/g, '').slice(-10)}?text=${encodeURIComponent(
+                                      `Dear Parent, the tuition fees of ₹${fee.totalAmount} for ${fee.studentId?.name || 'your child'} (${fee.feeDetails || 'Tuition Fee'}) has been marked as ${isCompleted ? 'COMPLETED' : 'PENDING'}. Thank you! - StudyMate Tuition`
+                                    )}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-2.5 py-1.5 rounded-lg font-medium text-xs flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition"
+                                    title="Send WhatsApp confirmation message to parent"
+                                  >
+                                    <MessageCircle size={13} /> Message
+                                  </a>
+                                )}
+
                                 {/* Quick One-Click Toggle Button */}
                                 <button
                                   onClick={() => handleToggleStatus(fee)}

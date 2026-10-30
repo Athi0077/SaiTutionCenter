@@ -9,9 +9,9 @@ const {
 } = require("../controllers/feeStatusController");
 const { protect, requireRole } = require("../middleware/authMiddleware");
 
-// Teacher routes
-router.get("/class/:classId", protect, requireRole("teacher"), getClassFeeStatuses);
-router.put("/student/:studentId", protect, requireRole("teacher"), updateStudentFeeStatus);
+// Teacher & Admin routes
+router.get("/class/:classId", protect, requireRole("teacher", "principal", "superadmin"), getClassFeeStatuses);
+router.put("/student/:studentId", protect, requireRole("teacher", "principal", "superadmin"), updateStudentFeeStatus);
 
 // Student route
 router.get("/my-status", protect, requireRole("student"), getMyFeeStatus);

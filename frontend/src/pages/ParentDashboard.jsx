@@ -71,9 +71,16 @@ const ParentDashboard = () => {
       const handleSyllabusUpdate = () => {
         fetchDashboard();
       };
+      const handleFeeUpdate = () => {
+        fetchDashboard();
+      };
       socket.on('syllabus_updated', handleSyllabusUpdate);
+      socket.on('fee_status_updated', handleFeeUpdate);
+      socket.on('notification:new', handleFeeUpdate);
       return () => {
         socket.off('syllabus_updated', handleSyllabusUpdate);
+        socket.off('fee_status_updated', handleFeeUpdate);
+        socket.off('notification:new', handleFeeUpdate);
       };
     }
   }, []);

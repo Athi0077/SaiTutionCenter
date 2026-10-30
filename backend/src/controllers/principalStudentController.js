@@ -13,6 +13,9 @@ const Quiz = require("../models/Quiz");
 const QuizSubmission = require("../models/QuizSubmission");
 const Standard = require("../models/Standard");
 const Section = require("../models/Section");
+const FeeStatus = require("../models/FeeStatus");
+const TuitionFee = require("../models/TuitionFee");
+const { checkAndRolloverFees } = require("../services/feeCycleScheduler");
 
 // Helper to compute grade from percentage
 const getGrade = (percentage) => {
@@ -61,6 +64,13 @@ exports.getStudentDetailsForPrincipal = async (req, res) => {
       }
     }
 
+    // Check and rollover fees if needed
+    try {
+      await checkAndRolloverFees();
+    } catch (e) {
+      console.warn("Fee rollover check warning:", e.message);
+    }
+
     // Parallel fetch for all modules
     const [
       attendanceRecords,
@@ -72,7 +82,9 @@ exports.getStudentDetailsForPrincipal = async (req, res) => {
       allProjects,
       projectSubmissions,
       quizSubmissions,
-      assignedQuizzes
+      assignedQuizzes,
+      feeStatusDoc,
+      tuitionFees
     ] = await Promise.all([
       Attendance.find({ studentId }).sort({ date: -1 }),
       studentClass ? Homework.find({ classId: studentClass._id }).sort({ createdAt: -1 }) : [],
@@ -91,7 +103,9 @@ exports.getStudentDetailsForPrincipal = async (req, res) => {
       }).sort({ submittedAt: -1 }),
       (standardDoc && sectionDoc)
         ? Quiz.find({ standardId: standardDoc._id, sectionId: sectionDoc._id }).sort({ createdAt: -1 })
-        : []
+        : [],
+      FeeStatus.findOne({ studentId }).populate("updatedBy", "name").sort({ updatedAt: -1 }),
+      TuitionFee.find({ studentId }).sort({ createdAt: -1 }).lean()
     ]);
 
     // ----------------------------------------------------
@@ -481,11 +495,102 @@ exports.getStudentDetailsForPrincipal = async (req, res) => {
     const resolvedAddress = rawAddress && String(rawAddress).trim() ? String(rawAddress).trim() : "N/A";
 
     // ----------------------------------------------------
+    // FEES CALCULATIONS & SUMMARY
+    // ----------------------------------------------------
+    const allPayments = [];
+    let totalFeeBilled = 0;
+    let totalFeePaid = 0;
+
+    (tuitionFees || []).forEach((tf) => {
+      totalFeeBilled += (tf.totalAmount || 0);
+      totalFeePaid += (tf.paidAmount || 0);
+      if (tf.paymentHistory && tf.paymentHistory.length > 0) {
+        tf.paymentHistory.forEach((p) => {
+          allPayments.push({
+            id: p._id ? p._id.toString() : `${tf._id}-${p.date}`,
+            feeId: tf._id,
+            feeDetails: tf.feeDetails || `${tf.feePeriod || 'Monthly'} Tuition Fee`,
+            amount: p.amount,
+            date: p.date,
+            method: p.method || "Cash",
+            remarks: p.remarks || ""
+          });
+        });
+      }
+    });
+
+    // If totalFeeBilled is 0 and student is enrolled in a class, check if class has sample tuition fee
+    if (totalFeeBilled === 0 && studentClass) {
+      const sampleFee = await TuitionFee.findOne({ classId: studentClass._id, totalAmount: { $gt: 0 } }).lean();
+      if (sampleFee) {
+        totalFeeBilled = sampleFee.totalAmount;
+      }
+    }
+
+    const isFeeStatusCompleted = feeStatusDoc?.feeStatus === "completed" || 
+      (tuitionFees && tuitionFees.length > 0 && tuitionFees.some(f => f.status === "COMPLETED" || f.status === "Paid"));
+    
+    const currentFeeStatus = isFeeStatusCompleted ? "completed" : (feeStatusDoc?.feeStatus || "pending");
+
+    if (isFeeStatusCompleted) {
+      if (totalFeePaid === 0 && totalFeeBilled > 0) {
+        totalFeePaid = totalFeeBilled;
+      }
+      if (allPayments.length === 0) {
+        allPayments.push({
+          id: `synth-${studentId}`,
+          feeDetails: feeStatusDoc?.feePeriod ? `${feeStatusDoc.feePeriod} Tuition Fee` : "Tuition Fee",
+          amount: totalFeePaid || totalFeeBilled || 0,
+          date: feeStatusDoc?.statusUpdatedAt || feeStatusDoc?.updatedAt || student.updatedAt || new Date(),
+          method: "Cash",
+          remarks: "Marked as completed"
+        });
+      }
+    }
+
+    // Sort payments descending by date (most recent first)
+    allPayments.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const lastPayment = allPayments.length > 0 ? allPayments[0] : null;
+
+    const feesSummary = {
+      status: currentFeeStatus,
+      statusUpdatedAt: feeStatusDoc?.statusUpdatedAt || (lastPayment ? lastPayment.date : null),
+      updatedBy: feeStatusDoc?.updatedBy?.name || null,
+      feePeriod: feeStatusDoc?.feePeriod || (tuitionFees && tuitionFees[0]?.feePeriod) || "Monthly",
+      totalAmount: totalFeeBilled,
+      paidAmount: totalFeePaid,
+      pendingAmount: Math.max(0, totalFeeBilled - totalFeePaid),
+      lastPayment: lastPayment ? {
+        amount: lastPayment.amount,
+        date: lastPayment.date,
+        method: lastPayment.method,
+        remarks: lastPayment.remarks,
+        feeDetails: lastPayment.feeDetails
+      } : null,
+      paymentHistory: allPayments,
+      feeRecords: (tuitionFees || []).map(tf => ({
+        id: tf._id,
+        feeDetails: tf.feeDetails || `${tf.feePeriod || 'Monthly'} Tuition Fee`,
+        feePeriod: tf.feePeriod || 'Monthly',
+        totalAmount: tf.totalAmount || 0,
+        paidAmount: tf.paidAmount || 0,
+        pendingAmount: Math.max(0, (tf.totalAmount || 0) - (tf.paidAmount || 0)),
+        status: tf.status,
+        dueDate: tf.dueDate,
+        billingPeriod: tf.billingPeriod,
+        lastBilledMonth: tf.lastBilledMonth,
+        createdAt: tf.createdAt
+      }))
+    };
+
+    // ----------------------------------------------------
     // FINAL RESPONSE PAYLOAD
     // ----------------------------------------------------
     res.json({
       success: true,
       data: {
+        fees: feesSummary,
         student: {
           id: student._id,
           name: student.name,

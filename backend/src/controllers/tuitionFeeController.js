@@ -65,6 +65,95 @@ const createFee = async (req, res) => {
   }
 };
 
+// Helper to notify linked parents and student when fee is completed
+const notifyFeeCompleted = async ({ fee, studentId, teacherUser }) => {
+  try {
+    const sId = studentId?._id || studentId;
+    const student = await User.findById(sId);
+    if (!student) return { notifiedParentsCount: 0, parentNames: [] };
+
+    // Find linked parents by children array or parentId
+    let linkedParents = await User.find({
+      $or: [
+        { role: { $in: ["parent", "parents"] }, children: student._id },
+        ...(student.parentId ? [{ _id: student.parentId }] : [])
+      ]
+    });
+
+    // Fallback: check student's parentPhone against parents' phone or mobileNumber
+    const studentParentPhone = (student.contactDetails?.parentPhone || student.phone || "").trim();
+    if (linkedParents.length === 0 && studentParentPhone) {
+      const parentByPhone = await User.find({
+        role: { $in: ["parent", "parents"] },
+        $or: [{ phone: studentParentPhone }, { mobileNumber: studentParentPhone }]
+      });
+      if (parentByPhone.length > 0) {
+        linkedParents = parentByPhone;
+      }
+    }
+
+    const feeTitle = fee.feeDetails || `${fee.feePeriod || 'Monthly'} Tuition Fee`;
+    const amount = fee.totalAmount || 0;
+    const studentName = student.name || "Your child";
+    const studentIdStr = student.studentId ? ` (${student.studentId})` : "";
+    const teacherName = teacherUser?.name || "Teacher";
+
+    // 1. Send in-app notification & FCM to each linked parent
+    for (const parent of linkedParents) {
+      await createNotification({
+        recipientId: parent._id,
+        senderId: teacherUser?._id,
+        type: "tuition_fee",
+        title: "Tuition Fees Completed ✅",
+        message: `Dear Parent, the tuition fees of ₹${amount} for ${studentName}${studentIdStr} (${feeTitle}) has been marked as COMPLETED by ${teacherName}. Thank you!`,
+        relatedId: fee._id,
+        relatedModel: "TuitionFee"
+      });
+    }
+
+    // 2. Also send notification to the student
+    await createNotification({
+      recipientId: student._id,
+      senderId: teacherUser?._id,
+      type: "tuition_fee",
+      title: "Tuition Fees Completed ✅",
+      message: `Your tuition fees of ₹${amount} (${feeTitle}) has been marked as COMPLETED by ${teacherName}. Thank you!`,
+      relatedId: fee._id,
+      relatedModel: "TuitionFee"
+    });
+
+    // 3. Emit real-time fee_status_updated socket event
+    try {
+      const { getIo } = require("../utils/socket");
+      const io = getIo();
+      if (io) {
+        io.to(`user:${student._id}`).emit("fee_status_updated", {
+          studentId: student._id,
+          status: "completed",
+          feeId: fee._id
+        });
+        for (const parent of linkedParents) {
+          io.to(`user:${parent._id}`).emit("fee_status_updated", {
+            studentId: student._id,
+            status: "completed",
+            feeId: fee._id
+          });
+        }
+      }
+    } catch (socketErr) {
+      console.warn("Socket notification warning:", socketErr.message);
+    }
+
+    return {
+      notifiedParentsCount: linkedParents.length,
+      parentNames: linkedParents.map(p => p.name)
+    };
+  } catch (err) {
+    console.error("Error in notifyFeeCompleted:", err);
+    return { notifiedParentsCount: 0, parentNames: [], error: err.message };
+  }
+};
+
 // @desc    Get all fee records
 // @route   GET /api/tuition-fees
 // @access  Private (Admin/Principal)
@@ -80,7 +169,7 @@ const getFees = async (req, res) => {
     if (status) filter.status = status;
 
     const fees = await TuitionFee.find(filter)
-      .populate("studentId", "name rollNumber studentId")
+      .populate("studentId", "name rollNumber studentId contactDetails phone")
       .populate("batchId", "className standard batchName")
       .populate("standardId", "name")
       .populate("classId", "standard className")
@@ -105,8 +194,36 @@ const getFees = async (req, res) => {
         }
       }
     }
+
+    // Attach linked parents info to each fee record for frontend display & direct messaging
+    const studentIds = fees.map(f => f.studentId?._id).filter(Boolean);
+    const parents = await User.find({
+      role: { $in: ["parent", "parents"] },
+      children: { $in: studentIds }
+    }).select("name mobileNumber phone children email");
+
+    const parentMap = {};
+    parents.forEach(p => {
+      (p.children || []).forEach(childId => {
+        const cid = childId.toString();
+        if (!parentMap[cid]) parentMap[cid] = [];
+        parentMap[cid].push({
+          _id: p._id,
+          name: p.name,
+          phone: p.mobileNumber || p.phone,
+          email: p.email
+        });
+      });
+    });
+
+    const enrichedFees = fees.map(f => {
+      const fObj = f.toObject ? f.toObject() : { ...f };
+      const sid = f.studentId?._id?.toString();
+      fObj.linkedParents = (sid && parentMap[sid]) || [];
+      return fObj;
+    });
       
-    res.json({ success: true, data: fees });
+    res.json({ success: true, data: enrichedFees });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -127,6 +244,8 @@ const recordPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: "Payment amount exceeds total fee amount" });
     }
 
+    const wasCompleted = fee.status === "COMPLETED" || fee.status === "Paid";
+
     fee.paidAmount += Number(amount);
     fee.paymentHistory.push({
       amount: Number(amount),
@@ -141,6 +260,7 @@ const recordPayment = async (req, res) => {
 
     await fee.save();
 
+    let notificationResult = null;
     if (fee.status === "COMPLETED") {
       await FeeStatus.updateMany(
         { studentId: fee.studentId },
@@ -153,9 +273,22 @@ const recordPayment = async (req, res) => {
           }
         }
       );
+
+      if (!wasCompleted) {
+        notificationResult = await notifyFeeCompleted({
+          fee,
+          studentId: fee.studentId,
+          teacherUser: req.user
+        });
+      }
     }
 
-    res.json({ success: true, message: "Payment recorded successfully", data: fee });
+    res.json({ 
+      success: true, 
+      message: "Payment recorded successfully", 
+      data: fee,
+      notifiedParentsCount: notificationResult?.notifiedParentsCount || 0
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -170,11 +303,28 @@ const getMyFees = async (req, res) => {
 
     let studentId = req.user._id;
 
-    if (req.user.role === 'parent') {
-      // Find the child
-      const child = await User.findOne({ parentId: req.user._id, role: 'student' });
-      if (!child) return res.status(404).json({ success: false, message: "Child not found for this parent" });
-      studentId = child._id;
+    if (req.user.role === 'parent' || req.user.role === 'parents') {
+      const parent = await User.findById(req.user._id);
+      let studentIds = parent?.children || [];
+      const studentsWithParentId = await User.find({ parentId: req.user._id, role: 'student' }).select('_id');
+      studentIds = [...new Set([...studentIds.map(id => id.toString()), ...studentsWithParentId.map(s => s._id.toString())])];
+
+      if (studentIds.length === 0) {
+        return res.json({ success: true, data: [] });
+      }
+
+      if (req.query.studentId && studentIds.includes(req.query.studentId.toString())) {
+        studentIds = [req.query.studentId];
+      }
+
+      const fees = await TuitionFee.find({ studentId: { $in: studentIds } })
+        .populate("studentId", "name rollNumber studentId")
+        .populate("batchId", "batchName className standard")
+        .populate("standardId", "name")
+        .populate("classId", "standard className")
+        .sort({ dueDate: -1, createdAt: -1 });
+
+      return res.json({ success: true, data: fees });
     }
 
     const fees = await TuitionFee.find({ studentId })
@@ -197,12 +347,18 @@ const updateFeeStatus = async (req, res) => {
     const fee = await TuitionFee.findById(id);
     if (!fee) return res.status(404).json({ success: false, message: "Fee record not found" });
 
+    const previousStatus = fee.status;
+
     if (feeAmount !== undefined && feeAmount !== '') fee.totalAmount = Number(feeAmount);
     if (feeDetails !== undefined) fee.feeDetails = feeDetails;
     if (feePeriod !== undefined) fee.feePeriod = feePeriod;
 
+    let notificationResult = null;
+
     if (status) {
       const isCompleted = status === "COMPLETED" || status === "Paid" || status.toLowerCase() === "completed";
+      const wasCompleted = previousStatus === "COMPLETED" || previousStatus === "Paid";
+
       fee.status = isCompleted ? "COMPLETED" : "PENDING";
 
       if (isCompleted) {
@@ -215,6 +371,13 @@ const updateFeeStatus = async (req, res) => {
             date: new Date()
           });
         }
+
+        // Notify linked parents and student
+        notificationResult = await notifyFeeCompleted({
+          fee,
+          studentId: fee.studentId,
+          teacherUser: req.user
+        });
       } else {
         fee.paidAmount = 0;
         fee.paymentHistory = [];
@@ -242,7 +405,13 @@ const updateFeeStatus = async (req, res) => {
       );
     }
 
-    res.json({ success: true, message: "Fee updated successfully", data: fee });
+    res.json({ 
+      success: true, 
+      message: "Fee updated successfully", 
+      data: fee,
+      notifiedParentsCount: notificationResult?.notifiedParentsCount || 0,
+      parentNames: notificationResult?.parentNames || []
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -253,5 +422,6 @@ module.exports = {
   getFees,
   recordPayment,
   getMyFees,
-  updateFeeStatus
+  updateFeeStatus,
+  notifyFeeCompleted
 };

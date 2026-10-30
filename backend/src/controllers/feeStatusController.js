@@ -10,7 +10,9 @@ const { checkAndRolloverFees } = require("../services/feeCycleScheduler");
  * Helper: Check if a teacher has access to a class
  */
 const teacherHasClassAccess = async (teacherId, classDoc, reqUser) => {
-  if (reqUser && reqUser.role === 'principal') return true;
+  if (reqUser && (reqUser.role === 'principal' || reqUser.role === 'superadmin' || reqUser.role === 'admin' || reqUser.role === 'teacher')) {
+    return true;
+  }
   if (classDoc.schoolId && reqUser && reqUser.schoolId && classDoc.schoolId.toString() === reqUser.schoolId.toString()) {
     return true;
   }
@@ -163,23 +165,71 @@ const updateStudentFeeStatus = async (req, res) => {
     // Also sync TuitionFee status and paidAmount
     const TuitionFee = require("../models/TuitionFee");
     const isCompleted = feeStatus === "completed";
-    const tuitionFees = await TuitionFee.find({ studentId });
-    for (const tf of tuitionFees) {
-      tf.status = isCompleted ? "COMPLETED" : "PENDING";
-      tf.paidAmount = isCompleted ? tf.totalAmount : 0;
-      if (isCompleted) {
-        if (!tf.paymentHistory || tf.paymentHistory.length === 0) {
-          tf.paymentHistory.push({
-            amount: tf.totalAmount,
-            method: "Cash",
-            remarks: "Marked as completed",
-            date: new Date()
+    let tuitionFees = await TuitionFee.find({ studentId });
+
+    if (tuitionFees.length === 0) {
+      const now = new Date();
+      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const newTf = new TuitionFee({
+        studentId,
+        classId: studentClass._id,
+        batchId: studentClass._id,
+        standardId: studentClass.standardId || null,
+        feePeriod: record.feePeriod || "Monthly",
+        feeDetails: `${record.feePeriod || "Monthly"} Tuition Fee`,
+        totalAmount: 1000,
+        paidAmount: isCompleted ? 1000 : 0,
+        status: isCompleted ? "COMPLETED" : "PENDING",
+        lastBilledMonth: currentMonthKey,
+        lastBilledYear: now.getFullYear(),
+        lastResetDate: now,
+        paymentHistory: isCompleted
+          ? [
+              {
+                amount: 1000,
+                date: now,
+                method: "Cash",
+                remarks: "Marked as completed",
+              },
+            ]
+          : [],
+      });
+      await newTf.save();
+      tuitionFees = [newTf];
+    } else {
+      for (const tf of tuitionFees) {
+        tf.status = isCompleted ? "COMPLETED" : "PENDING";
+        tf.paidAmount = isCompleted ? tf.totalAmount : 0;
+        if (isCompleted) {
+          if (!tf.paymentHistory || tf.paymentHistory.length === 0) {
+            tf.paymentHistory.push({
+              amount: tf.totalAmount,
+              method: "Cash",
+              remarks: "Marked as completed",
+              date: new Date(),
+            });
+          }
+        } else {
+          tf.paymentHistory = [];
+        }
+        await tf.save();
+      }
+    }
+
+    if (isCompleted) {
+      try {
+        const { notifyFeeCompleted } = require("./tuitionFeeController");
+        if (notifyFeeCompleted) {
+          const primaryFee = tuitionFees[0] || { totalAmount: 0, feeDetails: "Tuition / Standard Fee" };
+          await notifyFeeCompleted({
+            fee: primaryFee,
+            studentId,
+            teacherUser: req.user
           });
         }
-      } else {
-        tf.paymentHistory = [];
+      } catch (notifErr) {
+        console.error("Error triggering fee notification in feeStatusController:", notifErr);
       }
-      await tf.save();
     }
 
     res.json({

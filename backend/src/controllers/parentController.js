@@ -30,18 +30,6 @@ const createParent = async (req, res) => {
       if (userExists.role !== 'parent') {
         return res.status(400).json({ success: false, message: "Mobile number or email is already registered to a non-parent account" });
       }
-      
-      if (req.user.role === "teacher") {
-        const { getTeacherClasses } = require("../utils/teacherClassHelper");
-        const teacherClasses = await getTeacherClasses(req.user._id, "students");
-        const studentIds = teacherClasses.flatMap(c => (c.students || []).map(id => id.toString()));
-        if (childrenIds && childrenIds.length > 0) {
-          const hasUnauthorizedChild = childrenIds.some(id => !studentIds.includes(id.toString()));
-          if (hasUnauthorizedChild) {
-             return res.status(403).json({ success: false, message: "You can only link students from your assigned classes" });
-          }
-        }
-      }
 
       if (childrenIds && childrenIds.length > 0) {
         const existingIds = userExists.children.map(id => id.toString());
@@ -54,21 +42,6 @@ const createParent = async (req, res) => {
         return res.status(200).json({ success: true, message: "Parent exists. New students linked successfully.", data: userExists });
       } else {
         return res.status(400).json({ success: false, message: "Parent already exists. Please select students to link." });
-      }
-    }
-
-    if (req.user.role === "teacher") {
-      const { getTeacherClasses } = require("../utils/teacherClassHelper");
-      const teacherClasses = await getTeacherClasses(req.user._id, "students");
-      const studentIds = teacherClasses.flatMap(c => (c.students || []).map(id => id.toString()));
-      
-      if (childrenIds && childrenIds.length > 0) {
-        const hasUnauthorizedChild = childrenIds.some(id => !studentIds.includes(id.toString()));
-        if (hasUnauthorizedChild) {
-           return res.status(403).json({ success: false, message: "You can only link students from your assigned classes" });
-        }
-      } else {
-        return res.status(403).json({ success: false, message: "Teachers must select at least one student from their class" });
       }
     }
 
@@ -94,18 +67,7 @@ const createParent = async (req, res) => {
 // @access  Private (Principal)
 const getParents = async (req, res) => {
   try {
-    let parents = await User.find({ role: "parent" }).populate("children", "name studentId email");
-    
-    if (req.user.role === "teacher") {
-      const { getTeacherClasses } = require("../utils/teacherClassHelper");
-      const teacherClasses = await getTeacherClasses(req.user._id, "students");
-      const studentIds = teacherClasses.flatMap(c => (c.students || []).map(id => id.toString()));
-      
-      parents = parents.filter(parent => 
-        parent.children.some(child => studentIds.includes(child._id.toString()))
-      );
-    }
-    
+    const parents = await User.find({ role: "parent" }).populate("children", "name studentId email");
     res.json({ success: true, data: parents });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

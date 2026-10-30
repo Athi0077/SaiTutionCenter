@@ -25,7 +25,14 @@ import {
   Shield,
   Layers,
   Search,
-  ChevronRight
+  ChevronRight,
+  CreditCard,
+  IndianRupee,
+  CheckCircle,
+  AlertCircle,
+  RefreshCw,
+  Wallet,
+  Receipt
 } from 'lucide-react';
 
 const CATEGORY_ICONS = {
@@ -74,6 +81,51 @@ const PrincipalStudentDetails = () => {
     }
   };
 
+  const [feeUpdating, setFeeUpdating] = useState(false);
+
+  const handleUpdateFeeStatus = async (newStatus) => {
+    try {
+      setFeeUpdating(true);
+      const res = await api.put(`/fee-status/student/${studentId}`, { feeStatus: newStatus });
+      if (res.data.success) {
+        toast.success(`Fee status updated to "${newStatus}"!`);
+        setData((prev) => {
+          if (!prev) return prev;
+          const isCompleted = newStatus === 'completed';
+          const totalAmt = prev.fees?.totalAmount || 0;
+          const updatedFees = {
+            ...prev.fees,
+            status: newStatus,
+            statusUpdatedAt: new Date().toISOString(),
+            paidAmount: isCompleted ? totalAmt : 0,
+            pendingAmount: isCompleted ? 0 : totalAmt,
+          };
+          if (isCompleted) {
+            const newPayment = {
+              id: `pay-${Date.now()}`,
+              amount: totalAmt,
+              date: new Date().toISOString(),
+              method: 'Cash',
+              remarks: 'Marked as completed by principal',
+              feeDetails: `${prev.fees?.feePeriod || 'Monthly'} Tuition Fee`,
+            };
+            updatedFees.lastPayment = newPayment;
+            updatedFees.paymentHistory = [newPayment, ...(prev.fees?.paymentHistory || [])];
+          }
+          return {
+            ...prev,
+            fees: updatedFees,
+          };
+        });
+        fetchStudentDetails();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update fee status');
+    } finally {
+      setFeeUpdating(false);
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -108,10 +160,11 @@ const PrincipalStudentDetails = () => {
     );
   }
 
-  const { student, class: studentClass, metrics, personalFamilyDetails, attendance, homework, tests, exams, projects, funActivities, performanceAnalytics, recentActivityTimeline } = data;
+  const { student, class: studentClass, metrics, personalFamilyDetails, attendance, homework, tests, exams, projects, funActivities, performanceAnalytics, recentActivityTimeline, fees } = data;
 
   const tabs = [
     { id: 'overview', label: '📊 Overview' },
+    { id: 'fees', label: '💳 Tuition Fees' },
     { id: 'personal', label: '👤 Personal & Family' },
     { id: 'attendance', label: '📅 Attendance' },
     { id: 'homework', label: '📚 Homework' },
@@ -184,6 +237,18 @@ const PrincipalStudentDetails = () => {
               <p className="text-[10px] font-bold text-rose-300 uppercase tracking-wider">Activities</p>
               <p className="text-2xl font-black text-white">{metrics.activityAverage}%</p>
             </div>
+
+            {/* Fee Status Quick Badge */}
+            <button
+              onClick={() => setActiveTab('fees')}
+              className="bg-white/10 hover:bg-white/20 transition backdrop-blur-md border border-white/10 p-3.5 rounded-2xl text-center min-w-[95px] cursor-pointer"
+              title="Click to view complete fee details"
+            >
+              <p className="text-[10px] font-bold text-amber-300 uppercase tracking-wider">Fee Status</p>
+              <p className={`text-sm sm:text-base font-black flex items-center justify-center gap-1 mt-1 ${fees?.status === 'completed' ? 'text-emerald-300' : 'text-amber-300'}`}>
+                {fees?.status === 'completed' ? '✓ Paid' : '⏳ Pending'}
+              </p>
+            </button>
           </div>
 
           <div className="absolute right-0 top-0 bottom-0 opacity-10 w-1/3 bg-gradient-to-l from-emerald-400 to-transparent pointer-events-none"></div>
@@ -213,7 +278,7 @@ const PrincipalStudentDetails = () => {
           <div className="space-y-6">
             
             {/* KPI Cards Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
               <div className="bg-white dark:bg-[#0b1120] p-4 rounded-2xl border border-gray-100 dark:border-[#1E293B] shadow-xs text-center space-y-1">
                 <p className="text-xs font-bold text-emerald-600 uppercase">Attendance</p>
                 <p className="text-2xl font-black text-gray-900 dark:text-slate-100">{metrics.attendancePercentage}%</p>
@@ -254,6 +319,79 @@ const PrincipalStudentDetails = () => {
                 <p className="text-xs font-bold text-rose-600 uppercase">Fun Activities</p>
                 <p className="text-2xl font-black text-gray-900 dark:text-slate-100">{metrics.activityAverage}%</p>
                 <span className="text-[10px] text-gray-400">{funActivities.totalCompleted} Completed</span>
+              </div>
+
+              {/* Fee Status Card */}
+              <div 
+                onClick={() => setActiveTab('fees')}
+                className="bg-white dark:bg-[#0b1120] p-4 rounded-2xl border border-gray-100 dark:border-[#1E293B] shadow-xs text-center space-y-1 cursor-pointer hover:border-emerald-300 dark:hover:border-emerald-900 transition"
+                title="Click to view full fee records"
+              >
+                <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase">Fees</p>
+                <p className={`text-xl font-black capitalize ${fees?.status === 'completed' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {fees?.status === 'completed' ? 'Paid' : 'Pending'}
+                </p>
+                <span className="text-[10px] text-gray-400 truncate block">
+                  {fees?.lastPayment?.date ? `Paid ${new Date(fees.lastPayment.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}` : '⏳ Due'}
+                </span>
+              </div>
+            </div>
+
+            {/* Fees Overview Spotlight Card */}
+            <div className="bg-gradient-to-br from-white to-gray-50 dark:from-[#0b1120] dark:to-[#0f172a] p-6 rounded-3xl border border-gray-100 dark:border-[#1E293B] shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shrink-0 shadow-xs ${
+                  fees?.status === 'completed' 
+                    ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' 
+                    : 'bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                }`}>
+                  <CreditCard className="w-7 h-7" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-extrabold text-gray-900 dark:text-slate-100">Tuition Fee Intelligence</h3>
+                    <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${
+                      fees?.status === 'completed' 
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' 
+                        : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                    }`}>
+                      {fees?.status === 'completed' ? '✓ Completed' : '⏳ Pending'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                    {fees?.lastPayment ? (
+                      <>Last Payment: <strong className="text-gray-800 dark:text-slate-200">₹{fees.lastPayment.amount}</strong> on <strong className="text-gray-800 dark:text-slate-200">{new Date(fees.lastPayment.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</strong> ({fees.lastPayment.method})</>
+                    ) : (
+                      <>No fee payments recorded yet. Status is pending for {fees?.feePeriod || 'Monthly'} cycle.</>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 w-full md:w-auto justify-end shrink-0">
+                <button
+                  onClick={() => handleUpdateFeeStatus(fees?.status === 'completed' ? 'pending' : 'completed')}
+                  disabled={feeUpdating}
+                  className={`px-4 py-2 text-xs font-bold rounded-xl transition inline-flex items-center gap-1.5 shadow-xs ${
+                    fees?.status === 'completed'
+                      ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  }`}
+                >
+                  {feeUpdating ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : fees?.status === 'completed' ? (
+                    <>⏳ Change to Pending</>
+                  ) : (
+                    <>✅ Mark as Completed</>
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveTab('fees')}
+                  className="px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition inline-flex items-center gap-1.5 shadow-xs"
+                >
+                  View Details <ChevronRight className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
 
@@ -339,6 +477,354 @@ const PrincipalStudentDetails = () => {
               </div>
 
             </div>
+          </div>
+        )}
+
+        {/* TAB: FEES DETAILS */}
+        {activeTab === 'fees' && (
+          <div className="space-y-6">
+            
+            {/* Top Fees Control & Status Header Card */}
+            <div className="bg-white dark:bg-[#0b1120] rounded-3xl p-6 sm:p-8 border border-gray-100 dark:border-[#1E293B] shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              <div className="flex items-start sm:items-center gap-4">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shrink-0 shadow-sm ${
+                  fees?.status === 'completed' 
+                    ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' 
+                    : 'bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                }`}>
+                  <CreditCard className="w-7 h-7" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h2 className="text-xl font-extrabold text-gray-900 dark:text-slate-100">
+                      Student Tuition Fees Intelligence
+                    </h2>
+                    <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                      fees?.status === 'completed'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-300'
+                        : 'bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-900/40 dark:text-amber-300'
+                    }`}>
+                      {fees?.status === 'completed' ? (
+                        <><CheckCircle className="w-3.5 h-3.5" /> Fees Completed</>
+                      ) : (
+                        <><Clock className="w-3.5 h-3.5" /> Fees Pending</>
+                      )}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                    Standard fee period: <strong className="text-gray-700 dark:text-slate-200">{fees?.feePeriod || 'Monthly'}</strong>
+                    {fees?.statusUpdatedAt && (
+                      <> • Last status update: <strong>{new Date(fees.statusUpdatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong></>
+                    )}
+                    {fees?.updatedBy && <> by <strong>{fees.updatedBy}</strong></>}
+                  </p>
+                </div>
+              </div>
+
+              {/* Status Action Switcher */}
+              <div className="flex items-center gap-3 w-full sm:w-auto shrink-0 justify-end">
+                <button
+                  onClick={() => handleUpdateFeeStatus(fees?.status === 'completed' ? 'pending' : 'completed')}
+                  disabled={feeUpdating}
+                  className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm ${
+                    fees?.status === 'completed'
+                      ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  }`}
+                >
+                  {feeUpdating ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : fees?.status === 'completed' ? (
+                    <>
+                      <Clock className="w-4 h-4" /> Change Status to Pending
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" /> Mark as Completed (Paid)
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* 4 Financial KPI Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Card 1: Status */}
+              <div className="bg-white dark:bg-[#0b1120] p-5 rounded-2xl border border-gray-100 dark:border-[#1E293B] shadow-xs space-y-2">
+                <div className="flex items-center justify-between text-gray-500 dark:text-slate-400">
+                  <span className="text-xs font-bold uppercase tracking-wider">Current Status</span>
+                  <div className={`p-1.5 rounded-lg ${fees?.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+                    {fees?.status === 'completed' ? <CheckCircle className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                  </div>
+                </div>
+                <div className="text-2xl font-black text-gray-900 dark:text-slate-100 capitalize">
+                  {fees?.status === 'completed' ? 'Completed' : 'Pending'}
+                </div>
+                <p className="text-[11px] text-gray-400">
+                  {fees?.feePeriod || 'Monthly'} Billing Cycle
+                </p>
+              </div>
+
+              {/* Card 2: Total Fee */}
+              <div className="bg-white dark:bg-[#0b1120] p-5 rounded-2xl border border-gray-100 dark:border-[#1E293B] shadow-xs space-y-2">
+                <div className="flex items-center justify-between text-gray-500 dark:text-slate-400">
+                  <span className="text-xs font-bold uppercase tracking-wider">Total Fee Amount</span>
+                  <div className="p-1.5 rounded-lg bg-blue-100 text-blue-600">
+                    <IndianRupee className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-black text-gray-900 dark:text-slate-100">
+                  ₹{fees?.totalAmount || 0}
+                </div>
+                <p className="text-[11px] text-gray-400">
+                  Tuition Charges
+                </p>
+              </div>
+
+              {/* Card 3: Paid Amount */}
+              <div className="bg-white dark:bg-[#0b1120] p-5 rounded-2xl border border-gray-100 dark:border-[#1E293B] shadow-xs space-y-2">
+                <div className="flex items-center justify-between text-gray-500 dark:text-slate-400">
+                  <span className="text-xs font-bold uppercase tracking-wider">Amount Paid</span>
+                  <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-600">
+                    <Wallet className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                  ₹{fees?.paidAmount || 0}
+                </div>
+                <p className="text-[11px] text-gray-400">
+                  {fees?.totalAmount > 0 ? `${Math.round((fees.paidAmount / fees.totalAmount) * 100)}% Paid` : 'Recorded Payments'}
+                </p>
+              </div>
+
+              {/* Card 4: Due Balance */}
+              <div className="bg-white dark:bg-[#0b1120] p-5 rounded-2xl border border-gray-100 dark:border-[#1E293B] shadow-xs space-y-2">
+                <div className="flex items-center justify-between text-gray-500 dark:text-slate-400">
+                  <span className="text-xs font-bold uppercase tracking-wider">Pending Balance</span>
+                  <div className="p-1.5 rounded-lg bg-rose-100 text-rose-600">
+                    <AlertCircle className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-black text-rose-600 dark:text-rose-400">
+                  ₹{fees?.pendingAmount || 0}
+                </div>
+                <p className="text-[11px] text-gray-400">
+                  Outstanding Due
+                </p>
+              </div>
+            </div>
+
+            {/* Spotlight Card: Last Fee Payment Details */}
+            <div className={`rounded-3xl p-6 sm:p-8 border shadow-sm ${
+              fees?.lastPayment 
+                ? 'bg-gradient-to-br from-emerald-50/60 via-white to-teal-50/40 dark:from-emerald-950/20 dark:via-[#0b1120] dark:to-teal-950/20 border-emerald-200 dark:border-emerald-900/50' 
+                : 'bg-gradient-to-br from-amber-50/60 via-white to-orange-50/40 dark:from-amber-950/20 dark:via-[#0b1120] dark:to-orange-950/20 border-amber-200 dark:border-amber-900/50'
+            }`}>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-100 dark:border-[#1E293B] pb-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-xl text-white ${fees?.lastPayment ? 'bg-emerald-600' : 'bg-amber-600'}`}>
+                    <Receipt className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-gray-900 dark:text-slate-100">
+                      Last Fee Payment Details
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">
+                      Most recent fee transaction date and payment information for this student
+                    </p>
+                  </div>
+                </div>
+                {fees?.lastPayment && (
+                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                    Verified Transaction
+                  </span>
+                )}
+              </div>
+
+              {fees?.lastPayment ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="p-4 bg-white dark:bg-slate-900/60 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 space-y-1">
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-emerald-600" /> Payment Date
+                    </span>
+                    <p className="text-base font-extrabold text-gray-900 dark:text-slate-100">
+                      {new Date(fees.lastPayment.date).toLocaleDateString('en-IN', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric'
+                      })}
+                    </p>
+                    <p className="text-[10px] text-gray-400">
+                      {new Date(fees.lastPayment.date).toLocaleTimeString('en-IN', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-white dark:bg-slate-900/60 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 space-y-1">
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                      <IndianRupee className="w-3.5 h-3.5 text-emerald-600" /> Amount Paid
+                    </span>
+                    <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">
+                      ₹{fees.lastPayment.amount}
+                    </p>
+                    <p className="text-[10px] text-gray-400">
+                      {fees.lastPayment.feeDetails || 'Tuition Fee'}
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-white dark:bg-slate-900/60 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 space-y-1">
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                      <CreditCard className="w-3.5 h-3.5 text-emerald-600" /> Payment Mode
+                    </span>
+                    <p className="text-base font-extrabold text-gray-900 dark:text-slate-100">
+                      {fees.lastPayment.method || 'Cash'}
+                    </p>
+                    <p className="text-[10px] text-gray-400">
+                      Mode of receipt
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-white dark:bg-slate-900/60 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 space-y-1">
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                      <FileText className="w-3.5 h-3.5 text-emerald-600" /> Remarks / Note
+                    </span>
+                    <p className="text-sm font-semibold text-gray-800 dark:text-slate-200 truncate">
+                      {fees.lastPayment.remarks || 'Fees received'}
+                    </p>
+                    <p className="text-[10px] text-gray-400">
+                      Transaction reference
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-6 space-y-3">
+                  <div className="w-12 h-12 bg-amber-100 dark:bg-amber-950/50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto text-xl">
+                    ⏳
+                  </div>
+                  <h4 className="text-base font-bold text-gray-800 dark:text-slate-200">No Payment Recorded Yet</h4>
+                  <p className="text-xs text-gray-500 max-w-md mx-auto">
+                    This student does not have any recorded fee payments for the current billing period. Current status is <strong>Pending</strong>.
+                  </p>
+                  <button
+                    onClick={() => handleUpdateFeeStatus('completed')}
+                    disabled={feeUpdating}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition shadow-xs"
+                  >
+                    <CheckCircle className="w-4 h-4" /> Mark Tuition Fee as Completed
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Complete Payment History & Dates Table */}
+            <div className="bg-white dark:bg-[#0b1120] rounded-3xl border border-gray-100 dark:border-[#1E293B] shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-gray-100 dark:border-[#1E293B] flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-extrabold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-emerald-600" /> Payment History & Payment Dates
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                    Chronological record showing exact dates when fees were paid by or for this student
+                  </p>
+                </div>
+                <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300">
+                  {fees?.paymentHistory?.length || 0} Transactions
+                </span>
+              </div>
+
+              {(!fees?.paymentHistory || fees.paymentHistory.length === 0) ? (
+                <div className="p-12 text-center space-y-2">
+                  <p className="text-sm font-semibold text-gray-500">No payment history entries found.</p>
+                  <p className="text-xs text-gray-400">Payment records will automatically appear here once fees are paid or marked as completed.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-gray-50/70 dark:bg-slate-800/40 text-gray-500 dark:text-slate-400 uppercase font-black tracking-wider border-b border-gray-100 dark:border-[#1E293B]">
+                        <th className="p-4 w-12 text-center">#</th>
+                        <th className="p-4">Payment Date & Time</th>
+                        <th className="p-4">Fee Description</th>
+                        <th className="p-4">Amount Paid</th>
+                        <th className="p-4">Payment Mode</th>
+                        <th className="p-4">Remarks</th>
+                        <th className="p-4 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-[#1E293B]">
+                      {fees.paymentHistory.map((item, idx) => (
+                        <tr key={item.id || idx} className="hover:bg-emerald-50/20 dark:hover:bg-slate-800/30 transition">
+                          <td className="p-4 text-center font-bold text-gray-400">{idx + 1}</td>
+                          <td className="p-4 font-bold text-gray-900 dark:text-slate-100 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <div>
+                                <div>{new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                                <div className="text-[10px] text-gray-400 font-normal">
+                                  {new Date(item.date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4 text-gray-700 dark:text-slate-300 font-medium">
+                            {item.feeDetails || `${fees?.feePeriod || 'Monthly'} Tuition Fee`}
+                          </td>
+                          <td className="p-4 font-black text-emerald-600 dark:text-emerald-400 whitespace-nowrap text-sm">
+                            ₹{item.amount}
+                          </td>
+                          <td className="p-4 whitespace-nowrap">
+                            <span className="px-2.5 py-1 rounded-md bg-gray-100 dark:bg-slate-800 font-bold text-gray-700 dark:text-slate-300 text-[11px]">
+                              {item.method || 'Cash'}
+                            </span>
+                          </td>
+                          <td className="p-4 text-gray-500 italic max-w-xs truncate">
+                            {item.remarks || '-'}
+                          </td>
+                          <td className="p-4 text-center whitespace-nowrap">
+                            <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 font-bold text-[10px] inline-flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" /> Paid
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Fee Billing Records (if multiple exist) */}
+            {fees?.feeRecords && fees.feeRecords.length > 0 && (
+              <div className="bg-white dark:bg-[#0b1120] rounded-3xl border border-gray-100 dark:border-[#1E293B] shadow-sm overflow-hidden p-6 space-y-4">
+                <h3 className="text-base font-extrabold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-emerald-600" /> Fee Records & Invoices
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {fees.feeRecords.map((fr) => (
+                    <div key={fr.id} className="p-5 rounded-2xl border border-gray-100 dark:border-[#1E293B] bg-gray-50/50 dark:bg-slate-900/40 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-sm text-gray-800 dark:text-slate-200">{fr.feeDetails}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          fr.status === 'COMPLETED' || fr.status === 'Paid'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {fr.status}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <span>Cycle: <strong>{fr.feePeriod}</strong></span>
+                        <span>Total: <strong className="text-gray-900 dark:text-slate-100">₹{fr.totalAmount}</strong></span>
+                        <span>Paid: <strong className="text-emerald-600">₹{fr.paidAmount}</strong></span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </div>
         )}
 

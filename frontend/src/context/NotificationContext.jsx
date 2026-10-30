@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect, useContext } from 'react';
 import api from '../utils/api';
 import { AuthContext } from './AuthContext';
 import { getSocket } from '../services/socket';
+import toast from 'react-hot-toast';
 
 export const NotificationContext = createContext();
 
@@ -20,6 +21,12 @@ export const NotificationProvider = ({ children }) => {
         socket.on("notification:new", (notification) => {
           setNotifications(prev => [notification, ...prev]);
           setUnreadCount(prev => prev + 1);
+          if (notification?.title || notification?.message) {
+            toast.success(`${notification.title || 'New Notification'}: ${notification.message || ''}`, {
+              duration: 6000,
+              icon: '🔔',
+            });
+          }
         });
       }
 
